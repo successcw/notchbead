@@ -1,0 +1,2 @@
+{"version":1,"recordType":"message","source":"foreground","runId":"run-1","agent":"oracle","seq":1}
+{"type":"message","id":"ccc33333","parentId":null,"timestamp":"2026-11-01T01:00:00.000Z","message":{"role":"assistant","provider":"deepseek","model":"deepseek-v3","usage":{"input":9,"output":1,"cacheRead":0,"cacheWrite":0,"reasoning":0}}}

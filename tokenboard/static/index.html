@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Token 用量</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Token 用量</h1>
+      <span class="sub">本机 AI 编程助手用量看板</span>
+    </div>
+    <div class="actions">
+      <span id="last-ingest" class="muted">采集时间：—</span>
+      <span id="ingest-status" class="ingest-status"></span>
+      <button id="btn-ingest" class="primary" type="button">立即采集</button>
+    </div>
+  </header>
+
+  <section class="controls">
+    <div class="range-buttons" id="range-buttons">
+      <button type="button" data-range="today">今日</button>
+      <button type="button" data-range="yesterday">昨日</button>
+      <button type="button" data-range="3">近3日</button>
+      <button type="button" data-range="7">近7日</button>
+      <button type="button" data-range="30">近30日</button>
+      <button type="button" data-range="custom">自定义</button>
+    </div>
+    <div class="custom-range hidden" id="custom-range">
+      <label>开始 <input type="date" id="start-date"></label>
+      <label>结束 <input type="date" id="end-date"></label>
+    </div>
+    <label class="metric">
+      指标
+      <select id="metric-select">
+        <option value="total">总处理量（含 cache）</option>
+        <option value="io">输入+输出</option>
+        <option value="input">仅输入</option>
+        <option value="output">仅输出</option>
+        <option value="cost">成本 (USD)</option>
+      </select>
+    </label>
+  </section>
+
+  <section class="card chart-card">
+    <div id="chart" class="chart"></div>
+    <p id="summary" class="summary">加载中…</p>
+  </section>
+
+  <section class="card table-card">
+    <div class="tabs" id="tabs">
+      <button type="button" data-tab="source" class="active">Coding Agent</button>
+      <button type="button" data-tab="model">模型</button>
+      <button type="button" data-tab="device">设备</button>
+      <button type="button" data-tab="project">项目</button>
+    </div>
+    <table class="breakdown">
+      <thead>
+        <tr>
+          <th class="col-name">名称</th>
+          <th class="col-share">占比</th>
+          <th class="col-value">数值</th>
+          <th class="col-cost">成本</th>
+          <th class="col-cost-share">成本占比</th>
+        </tr>
+      </thead>
+      <tbody id="breakdown-body">
+        <tr><td colspan="5" class="muted">加载中…</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="footer muted">
+    数据来自本机 pi / claude-code / codex 日志，仅写入本地 SQLite。
+  </footer>
+
+  <script src="/static/echarts.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+# tokenboard
+
+本机的 AI 编程助手 token 用量看板。它把 **pi**、**claude-code**、**codex** 三个
+coding agent 写在本地日志里的用量，汇总进一个 SQLite 数据库，并用一个只监听
+`127.0.0.1` 的本地网页把每天的趋势画出来。
+
+只依赖 Python 3.13 标准库，全部数据留在本机，不上传、不联网。
+
+- 网页：`http://127.0.0.1:8787/`（仅本机可访问）
+- 数据库：`~/Library/Application Support/tokenboard/usage.db`
+- 服务日志：`~/Library/Logs/tokenboard/<label>.log`
+
+## 数据来源
+
+日志只读，tokenboard 从不修改或删除这些文件：
+
+| 来源 | 日志位置 | 说明 |
+| --- | --- | --- |
+| pi | `~/.pi/agent/sessions/**/*.jsonl` | 含 `forks/` 子目录；fork 会复制父会话的消息，按 `id + timestamp` 去重，只算一次 |
+| claude-code | `~/.claude/projects/**/*.jsonl` | 一个 API 响应会写成多行（每个 content block 一行），按 `message.id + requestId` 去重；`<synthetic>` 消息跳过 |
+| codex | `~/.codex/sessions/**/*.jsonl[.zst]`、`~/.codex/archived_sessions/**/*.jsonl[.zst]` | 优先 `token_usage_record`（按 `response_id` 去重）；老文件没有该记录时才回退到 `token_count`；`.zst` 通过 `zstd -dc` 解压 |
+
+可用环境变量覆盖路径：`TOKENBOARD_PI_DIR`、`TOKENBOARD_CLAUDE_DIR`、
+`TOKENBOARD_CODEX_DIR`、`TOKENBOARD_DB`、`TOKENBOARD_DEVICE`。
+
+## 为什么服务必须常驻
+
+Claude Code 会自动删除旧的 transcript，pi / codex 也会压缩或清理历史日志。
+**原始日志是短期的，数据库才是长期记录。** 所以后台服务需要一直运行：
+
+- 启动时立刻采集一次；
+- 之后每 300 秒采集一次；
+- 只重新解析 `(size, mtime)` 变化的文件；
+- 写入用 `INSERT OR IGNORE`，重复采集永远不会重复计数（幂等）；
+- 某个文件解析失败只会记录错误并跳过，下次运行会重试，不会中断其它文件。
+
+如果服务停了几天，那几天的历史不会丢（日志还在时下次采集会补上）；
+但如果日志在服务停摆期间被工具删掉，那段用量就无法恢复。
+
+## 指标定义
+
+| 指标 | 含义 |
+| --- | --- |
+| 总处理量（含 cache） | `input + output + cache_read + cache_write`，包含缓存命中与写入 |
+| 输入+输出 | `input + output`，不含缓存（最接近"实际计算量"） |
+| 仅输入 | `input`，未命中缓存的输入 token |
+| 仅输出 | `output`，包含推理（reasoning）token |
+| 成本 (USD) | 见下节；有任一记录成本未知时，总计标注为「部分」 |
+
+## 成本规则
+
+1. **日志里自带成本时优先用日志**：pi 的 `usage.cost.total` 直接入库。
+2. 否则查 `tokenboard/pricing.json`（单位：**美元 / 100 万 token**），按归一化后的
+   模型名匹配（取最后一个 `/` 之后、小写）。claude-code 与 codex 走这条路。
+3. 模型不在价格表里 → 该行事件的成本**未知**：同一分组里如果还有已定价（或日志自带成本）
+   的事件，网页照常显示**已知小计**并加一个小标记「部分」；只有当整个分组都没有已知成本时
+   才显示 `—`。未知成本不计入合计，合计因此会标记「部分”；命令行 `summary --metric cost`
+   同样按这套规则计算，并在表下打印 `note: 部分（partial）…` 提醒。
+4. `cache_write` 按 **1 小时 TTL** 的价格计价（Claude Code 写缓存用的是这个档位，
+   通常是 input 单价的 2 倍）。
+5. GPT / DeepSeek 等模型目前**未定价**（价格表里没有它们），所以成本合计通常显示
+   「部分」；想看到完整成本，把自己的价格加进 `pricing.json` 即可。
+
+## 安装（launchd 常驻服务）
+
+```bash
+scripts/install.sh
+```
+
+脚本会做这些事：
+
+- 解析当前 `python3` 的绝对路径，并检查版本 **≥ 3.13**（不满足会给出明确报错）；
+- 检查 `zstd` 是否可用（codex 的 `.zst` 历史需要它），缺失时给出警告；
+- 在 `~/Library/LaunchAgents/<label>.plist` 写入 LaunchAgent：
+  - `ProgramArguments`：`<python3> -m tokenboard serve --port <port>`
+  - `WorkingDirectory`：仓库根目录
+  - `RunAtLoad` / `KeepAlive` 为 true，`ThrottleInterval` 30 秒
+  - 输出与错误都写到 `~/Library/Logs/tokenboard/<label>.log`
+  - `PATH` 固定为 `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`
+    （launchd 默认 PATH 不含 Homebrew，否则找不到 `zstd`），
+    并设置 `PYTHONDONTWRITEBYTECODE=1`
+- 如果同名服务已在运行，先 `launchctl bootout` 再 `launchctl bootstrap`，可反复执行；
+- 最后轮询 `http://127.0.0.1:<port>/api/meta` 最多 60 秒：成功打印访问地址，
+  失败则打印日志尾部并以非零状态退出。
+
+可覆盖的环境变量：
+
+| 变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| `TB_LABEL` | `com.tokenboard.server` | LaunchAgent 标签（plist 与日志文件名） |
+| `TB_PORT` | `8787` | 网页端口（只绑定 127.0.0.1） |
+| `TOKENBOARD_DB` | `~/Library/Application Support/tokenboard/usage.db` | 数据库路径，设置后会写进 plist |
+| `TB_PYTHON` | PATH 上的 `python3` | 指定解释器 |
+
+例：换端口和数据库跑一份独立实例
+
+```bash
+TB_LABEL=com.tokenboard.test TB_PORT=8798 TOKENBOARD_DB=/tmp/tb.db scripts/install.sh
+```
+
+## 卸载
+
+```bash
+scripts/uninstall.sh          # 或 TB_LABEL=com.tokenboard.test scripts/uninstall.sh
+```
+
+只做两件事：停止服务、删除 `~/Library/LaunchAgents/<label>.plist`。
+**不会删除数据库，也不会删除日志**，脚本最后会打印它们的位置。
+数据库是长期记录，确实不需要时请手动删除。
+
+## 命令行用法
+
+在**仓库根目录**执行（clone 下来的 tokenboard 目录）：
+
+```bash
+cd <仓库目录>
+
+# 采集一次，打印每个来源的新增行数 / 解析文件数 / 错误数
+python3 -m tokenboard ingest
+
+# 按天 × 来源打印表格（默认近 7 天，指标 total）
+python3 -m tokenboard summary --days 3 --metric io
+
+# 成本：与网页同一套规则（日志成本 → pricing.json 估算 → 未知），
+# 有未定价模型时会在表下打印一行「部分（partial）」提示
+python3 -m tokenboard summary --days 30 --metric cost
+
+# 前台启动网页服务（默认 8787）
+python3 -m tokenboard serve --port 8787
+```
+
+`--metric` 可选：`total`（默认）、`io`、`input`、`output`、`cost`。
+
+`summary --metric cost` 的输出示例（claude-code 有价格、codex 的 GPT 未定价）：
+
+```
+metric: cost (USD)   range: 2026-10-03 .. 2026-11-01
+       day  claude-code   codex     total
+2026-11-01     181.4967  0.0000  181.4967
+     TOTAL     181.4967  0.0000  181.4967
+note: 部分（partial）— 812 rows in range have no known price, so the totals only
+cover models listed in tokenboard/pricing.json
+```
+
+也就是说：有价格的模型照常计入，未定价模型的行的成本按「未知」处理（不计入合计），
+并在末尾用 `note: 部分（partial）` 提醒合计只覆盖已知价格部分。
+
+HTTP 接口（仅 127.0.0.1）：
+
+- `GET /api/meta` → 来源、设备、首末日期、最近采集时间
+- `GET /api/daily?start=&end=&metric=` → 每天的按来源序列（区间内无数据的日子补 0）
+- `GET /api/breakdown?start=&end=&metric=&by=source|model|device|project` → 占比明细
+- `POST /api/ingest` → 立即采集，返回各来源计数
+- `GET /`、`GET /static/*` → 网页与静态资源
+
+## 如何新增模型价格
+
+编辑 `tokenboard/pricing.json`（单位：美元 / 100 万 token，键是归一化模型名，
+以 `_` 开头的键是注释，会被忽略）：
+
+```json
+{
+  "_comment": "USD per 1M tokens",
+  "claude-opus-5-5": {"input": 4.0, "output": 20.0, "cache_read": 0.20, "cache_write": 8.0},
+  "gpt-6-astra":     {"input": 1.25, "output": 10.0, "cache_read": 0.125, "cache_write": 0.0}
+}
+```
+
+保存后无需重启：服务每次请求都会检查文件是否变动，自动重新加载。
+历史记录的估算成本会立即随之更新（数据库里存的是 token 数，不是金额）。
+
+模型名的归一化规则：取日志里模型字符串最后一个 `/` 之后的部分，转小写并去空格。
+不确定某个模型在库里叫什么，可以在网页「模型」标签页把鼠标停在该名字上，
+会显示日志中的原始模型名。
+
+## 跑测试
+
+在仓库根目录执行：
+
+```bash
+python3 -m unittest discover -s tests -t .
+```
+
+测试全部使用临时目录和临时数据库（`TOKENBOARD_DB` 指向临时文件），
+不会读写你自己的真实日志与数据库。

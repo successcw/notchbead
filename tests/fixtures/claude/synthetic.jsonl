@@ -1,0 +1,1 @@
+{"parentUuid":null,"isSidechain":false,"type":"assistant","message":{"model":"<synthetic>","id":"msg_synth","type":"message","role":"assistant","content":[{"type":"text","text":"api error"}],"usage":{"input_tokens":10,"output_tokens":1}},"uuid":"s-1","timestamp":"2026-11-01T03:00:00.000Z","cwd":"/tmp/proj-claude","sessionId":"sess-claude","requestId":"req_synth"}
