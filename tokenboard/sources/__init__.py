@@ -7,9 +7,9 @@ columns).
 
 from __future__ import annotations
 
-from . import claude_code, codex, pi
+from . import claude_code, codex, pi, workbuddy
 
-SOURCES = (pi, claude_code, codex)
+SOURCES = (pi, claude_code, codex, workbuddy)
 SOURCE_NAMES = tuple(source.NAME for source in SOURCES)
 BY_NAME = {source.NAME: source for source in SOURCES}
 

@@ -10,7 +10,7 @@ import datetime as _dt
 import sqlite3
 from pathlib import Path
 
-from . import config, pricing
+from . import aliases, config, pricing
 
 SCHEMA_VERSION = 2  # bump when stored rows must be repaired by a full re-parse
 
@@ -73,7 +73,9 @@ METRIC_SQL = {
 
 BREAKDOWN_KEYS = {
     "source": "source",
-    "model": "COALESCE(model, model_raw)",
+    # Query-time alias merge: several raw model names can share one display
+    # name. Stored rows keep their own model/model_raw for pricing and hover.
+    "model": "model_alias(COALESCE(model, model_raw))",
     "device": "device",
     "project": "project",
 }
@@ -95,6 +97,8 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     init_schema(conn)
     pricing.register_cost_function(conn, pricing.load_pricing())
+    # Initial alias snapshot; query_breakdown() refreshes it per breakdown.
+    aliases.register_alias_function(conn)
     return conn
 
 
@@ -283,6 +287,9 @@ def query_breakdown(
     by: str = "source",
 ) -> dict:
     """Aggregate by source / model / device / project, sorted by value desc."""
+    # One alias snapshot per breakdown: the aggregate and every raw lookup below
+    # then agree, and an edited model_aliases.json applies to the next query.
+    aliases.register_alias_function(conn)
     expr = _metric_expr(metric)
     try:
         key_expr = BREAKDOWN_KEYS[by]

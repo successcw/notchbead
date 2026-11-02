@@ -39,6 +39,13 @@ def claude_dir() -> Path:
     return _env_path("TOKENBOARD_CLAUDE_DIR", Path.home() / ".claude" / "projects")
 
 
+def workbuddy_dir() -> Path:
+    """WorkBuddy project logs (``TOKENBOARD_WORKBUDDY_DIR`` overrides)."""
+    return _env_path(
+        "TOKENBOARD_WORKBUDDY_DIR", Path.home() / ".workbuddy" / "projects"
+    )
+
+
 def codex_dir() -> Path:
     """codex home (``TOKENBOARD_CODEX_DIR`` overrides)."""
     return _env_path("TOKENBOARD_CODEX_DIR", Path.home() / ".codex")

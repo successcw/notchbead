@@ -82,19 +82,27 @@ class TempEnvTestCase(unittest.TestCase):
         self.codex_root = self.root / "codex"
         self.codex_sessions = self.codex_root / "sessions"
         self.codex_archived = self.codex_root / "archived_sessions"
+        self.workbuddy_root = self.root / "workbuddy"
         for path in (
             self.pi_root,
             self.claude_root,
             self.codex_sessions,
             self.codex_archived,
+            self.workbuddy_root,
         ):
             path.mkdir(parents=True, exist_ok=True)
         self.db_path = self.root / "usage.db"
+        # An empty alias table keeps tests independent of the shipped JSON file;
+        # alias-specific tests point TOKENBOARD_ALIASES at their own file.
+        self.aliases_file = self.root / "model_aliases.json"
+        self.aliases_file.write_text("{}\n", encoding="utf-8")
         env = {
             "TOKENBOARD_DB": str(self.db_path),
             "TOKENBOARD_PI_DIR": str(self.pi_root),
             "TOKENBOARD_CLAUDE_DIR": str(self.claude_root),
             "TOKENBOARD_CODEX_DIR": str(self.codex_root),
+            "TOKENBOARD_WORKBUDDY_DIR": str(self.workbuddy_root),
+            "TOKENBOARD_ALIASES": str(self.aliases_file),
             "TOKENBOARD_DEVICE": "testhost",
         }
         patcher = mock.patch.dict(os.environ, env)

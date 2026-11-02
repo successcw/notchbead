@@ -190,11 +190,56 @@ class MetaAndStaticTests(ServerTestCase):
         self.assertEqual(status, 200)
         self.assertGreater(len(body), 100_000)
 
-    def test_unknown_path_is_404_and_traversal_is_blocked(self):
-        for path in ("/nope", "/static/../tokenboard/db.py"):
-            with self.assertRaises(urllib.error.HTTPError) as ctx:
-                self.get(path)
-            self.assertIn(ctx.exception.code, (403, 404))
+    def test_logos_are_served_as_svg(self):
+        # The Coding Agent tab loads /static/logos/<source>.svg at runtime.
+        for name in ("pi.svg", "claude-code.svg", "codex.svg", "workbuddy.svg"):
+            with urllib.request.urlopen(
+                f"{self.base}/static/logos/{name}", timeout=10
+            ) as response:
+                self.assertEqual(response.status, 200, name)
+                self.assertEqual(
+                    response.headers.get("Content-Type"), "image/svg+xml", name
+                )
+                body = response.read()
+                self.assertIn(b"<svg", body, name)
+        # every logo file referenced by the UI really exists
+        js = (server_mod.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        for name in ("pi.svg", "claude-code.svg", "codex.svg", "workbuddy.svg"):
+            self.assertIn(f"/static/logos/{name}", js)
+
+    def test_logo_traversal_to_an_existing_file_is_forbidden(self):
+        # The escape must land on a file that really exists, otherwise a 404
+        # would hide a missing guard: /static/logos/../../server.py resolves to
+        # tokenboard/server.py, so without the guard this would be a 200.
+        escape = "/static/logos/../../server.py"
+        outside = (server_mod.STATIC_DIR.parent / "server.py").resolve()
+        self.assertTrue(outside.is_file(), "test premise: the escape target exists")
+        self.assertNotIn(server_mod.STATIC_DIR.resolve(), outside.parents)
+
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self.get(escape)
+        self.assertEqual(ctx.exception.code, 403)
+
+    def test_missing_logo_is_404(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self.get("/static/logos/nope.svg")
+        self.assertEqual(ctx.exception.code, 404)
+
+    def test_unknown_path_is_404(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self.get("/nope")
+        self.assertEqual(ctx.exception.code, 404)
+
+    def test_static_traversal_to_an_existing_file_is_forbidden(self):
+        # "/static/../server.py" resolves to tokenboard/server.py: an existing
+        # file outside static/, so only the guard can turn this into a 403.
+        escape = "/static/../server.py"
+        outside = (server_mod.STATIC_DIR.parent / "server.py").resolve()
+        self.assertTrue(outside.is_file(), "test premise: the escape target exists")
+
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self.get(escape)
+        self.assertEqual(ctx.exception.code, 403)
 
 
 class DailyTests(ServerTestCase):

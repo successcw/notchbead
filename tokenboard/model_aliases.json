@@ -1,0 +1,5 @@
+{
+  "_comment": "normalized model name -> display name used by the 模型 breakdown. Raw names are kept in the DB and shown on hover.",
+  "deepseek-flash": "deepseek-v4.1-flash:1017",
+  "deepseek-v4.1-flash": "deepseek-v4.1-flash:1017"
+}

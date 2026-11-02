@@ -19,16 +19,25 @@
     custom: "自定义"
   };
   var SOURCE_COLORS = {
-    pi: "#4f8cff",
-    "claude-code": "#d8a657",
-    codex: "#7dd3a0"
+    pi: "#B08F45",
+    "claude-code": "#C2714F",
+    codex: "#7468CC",
+    workbuddy: "#2E9E76"
+  };
+  // Vendored brand marks (static/logos/, see its README for sources/licences).
+  // Used for the Coding Agent tab only; other tabs keep the plain dot.
+  var SOURCE_LOGOS = {
+    pi: "/static/logos/pi.svg",
+    "claude-code": "/static/logos/claude-code.svg",
+    codex: "/static/logos/codex.svg",
+    workbuddy: "/static/logos/workbuddy.svg"
   };
   var PALETTE = [
-    "#4f8cff", "#d8a657", "#7dd3a0", "#c58af9",
+    "#7468CC", "#B08F45", "#2E9E76", "#c58af9",
     "#f97583", "#63d3d8", "#a6e3a1", "#f2cc60"
   ];
   var TOP_ROWS = 20;
-  var ACCENT_COLOR = "#4f8cff";
+  var ACCENT_COLOR = "#6EA8FE";
 
   var state = {
     range: "30",
@@ -335,13 +344,17 @@
     var sharePct = Math.max(Math.min(Number(row.share) || 0, 1), 0) * 100;
     var raws = (row.raw || []).filter(function (value) { return value; });
     var title = raws.length ? ' title="' + escapeHtml(raws.join("\n")) + '"' : "";
-    // The Coding Agent tab colours each bar like its chart series; the other
-    // tabs stay on the single accent colour.
+    // The Coding Agent tab colours each bar like its chart series and shows the
+    // vendor logo; other tabs keep the single accent colour and the plain dot.
     var barColor = by === "source" ? colorFor(row.key) : ACCENT_COLOR;
+    var logo = by === "source" ? SOURCE_LOGOS[row.key] : null;
+    var marker = logo
+      ? '<img class="logo" src="' + logo + '" alt="" width="16" height="16">'
+      : '<span class="dot" style="background:' + barColor + '"></span>';
     var cells = formatCostCells(row);
     return "<tr>" +
       '<td class="col-name"><div class="name-cell">' +
-      '<span class="dot" style="background:' + barColor + '"></span>' +
+      marker +
       "<span" + title + ">" + escapeHtml(row.key) + "</span>" +
       "</div></td>" +
       '<td class="col-share"><div class="share-wrap">' +

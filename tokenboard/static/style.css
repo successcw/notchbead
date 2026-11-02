@@ -5,7 +5,7 @@
   --border: #232b36;
   --text: #e6edf3;
   --text-dim: #8b949e;
-  --accent: #4f8cff;
+  --accent: #6EA8FE;
   --accent-soft: rgba(79, 140, 255, 0.18);
   --bar-track: #1f2731;
 }
@@ -42,7 +42,7 @@ html, body {
 
 /* Inline ingest feedback (errors from POST /api/ingest land here). */
 .ingest-status {
-  color: #d8a657;
+  color: #e3b341;
   font-size: 12px;
   max-width: 420px;
   text-align: right;
@@ -118,11 +118,11 @@ select { min-width: 180px; }
   font-size: 13px;
 }
 .summary strong { color: var(--text); font-weight: 600; }
-.summary .partial { color: #d8a657; }
+.summary .partial { color: #e3b341; }
 
 /* Small inline 「部分」 marker for partially priced rows. */
 td .partial {
-  color: #d8a657;
+  color: #e3b341;
   font-size: 11px;
   margin-left: 2px;
 }
@@ -160,7 +160,16 @@ table.breakdown tbody tr:hover { background: var(--bg-hover); }
 .col-value, .col-cost, .col-cost-share { text-align: right; white-space: nowrap; }
 .col-share { width: 260px; }
 
-.name-cell { display: flex; align-items: center; gap: 6px; }
+.name-cell { display: flex; align-items: center; gap: 8px; }
+
+/* Vendored brand mark (Coding Agent tab); same box as the plain .dot. */
+.name-cell .logo {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  display: block;
+}
 .name-cell .dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--accent); flex: 0 0 auto;

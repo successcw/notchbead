@@ -1,8 +1,8 @@
 # tokenboard
 
-本机的 AI 编程助手 token 用量看板。它把 **pi**、**claude-code**、**codex** 三个
-coding agent 写在本地日志里的用量，汇总进一个 SQLite 数据库，并用一个只监听
-`127.0.0.1` 的本地网页把每天的趋势画出来。
+本机的 AI 编程助手 token 用量看板。它把 **pi**、**claude-code**、**codex**、
+**workbuddy** 四个 coding agent 写在本地日志里的用量，汇总进一个 SQLite 数据库，
+并用一个只监听 `127.0.0.1` 的本地网页把每天的趋势画出来。
 
 只依赖 Python 3.13 标准库，全部数据留在本机，不上传、不联网。
 
@@ -19,9 +19,11 @@ coding agent 写在本地日志里的用量，汇总进一个 SQLite 数据库�
 | pi | `~/.pi/agent/sessions/**/*.jsonl` | 含 `forks/` 子目录；fork 会复制父会话的消息，按 `id + timestamp` 去重，只算一次 |
 | claude-code | `~/.claude/projects/**/*.jsonl` | 一个 API 响应会写成多行（每个 content block 一行），按 `message.id + requestId` 去重；`<synthetic>` 消息跳过 |
 | codex | `~/.codex/sessions/**/*.jsonl[.zst]`、`~/.codex/archived_sessions/**/*.jsonl[.zst]` | 优先 `token_usage_record`（按 `response_id` 去重）；老文件没有该记录时才回退到 `token_count`；`.zst` 通过 `zstd -dc` 解压 |
+| workbuddy | `~/.workbuddy/projects/**/*.jsonl` | 任何带 `providerData.rawUsage` 的行都算用量；`prompt_tokens` 含缓存读写，会先扣掉 `cache_read`/`cache_write`；按 `messageId + prompt/completion tokens` 去重（同一个 `messageId` 的两次不同调用都算）；`tool-results/` 目录跳过 |
 
 可用环境变量覆盖路径：`TOKENBOARD_PI_DIR`、`TOKENBOARD_CLAUDE_DIR`、
-`TOKENBOARD_CODEX_DIR`、`TOKENBOARD_DB`、`TOKENBOARD_DEVICE`。
+`TOKENBOARD_CODEX_DIR`、`TOKENBOARD_WORKBUDDY_DIR`、`TOKENBOARD_DB`、
+`TOKENBOARD_DEVICE`、`TOKENBOARD_ALIASES`。
 
 ## 为什么服务必须常驻
 
@@ -46,6 +48,28 @@ Claude Code 会自动删除旧的 transcript，pi / codex 也会压缩或清理�
 | 仅输入 | `input`，未命中缓存的输入 token |
 | 仅输出 | `output`，包含推理（reasoning）token |
 | 成本 (USD) | 见下节；有任一记录成本未知时，总计标注为「部分」 |
+
+## 模型别名（把多个原始模型名合并显示）
+
+有些上游会用不同的名字记录同一个模型（例如 `deepseek-flash` 和
+`deepseek-v4.1-flash`），「模型」标签页里就会拆成几行。用
+`tokenboard/model_aliases.json` 可以在**查询时**把它们合并成一个显示名：
+
+```json
+{
+  "_comment": "normalized model name -> display name used by the 模型 breakdown",
+  "deepseek-flash": "deepseek-v4.1-flash:1017",
+  "deepseek-v4.1-flash": "deepseek-v4.1-flash:1017"
+}
+```
+
+- 键是**归一化后的模型名**（取日志里模型字符串最后一个 `/` 之后、小写、去空格），
+  值是合并后在「模型」标签页显示的名字；键和值都会再统一转小写、去空格。
+- 以 `_` 开头的键是注释，会被忽略。
+- 只影响「模型」标签页的分组：数据库里存的原始模型名不变，成本计算也仍按原始模型名查价。
+  鼠标停在合并后的名字上，会列出它背后的所有原始模型名。
+- 保存即生效，不需要重启服务；文件缺失或格式错误就当作「没有别名」，不会报错。
+- 环境变量 `TOKENBOARD_ALIASES` 可以指向另一份别名文件。
 
 ## 成本规则
 
