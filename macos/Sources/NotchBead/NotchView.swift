@@ -2,10 +2,10 @@ import SwiftUI
 
 // Adapted from onit's notch (MIT, Copyright (c) 2026 Neethan Wu).
 
-/// One black shape: the notch plus a right wing that is always out, so the shape never changes size.
-/// The wing shows today's tokens from tokenboard, dimmed ("2.01亿"). When something needs you, the
-/// figure drifts up and fades, and the icon of the app that wants you (taking turns when there are
-/// several) and Bead with a small count on its corner rise in its place. Clicking takes you straight
+/// One black shape: the notch plus a wing on each side, always out, so the shape never changes size.
+/// The right wing shows today's tokens from tokenboard, dimmed ("2.01亿"). When something needs you,
+/// the icon of the app that wants you (taking turns when there are several) and Bead with a small
+/// count on its corner rise into the left wing. Clicking takes you straight
 /// to the next thing, in order; right-click has the dashboard and settings.
 struct NotchView: View {
     let store: AttentionStore
@@ -19,13 +19,12 @@ struct NotchView: View {
     private var present: Bool { !store.visible.isEmpty }
     /// Today's tokens, once tokenboard has answered.
     private var tokenLabel: String? { store.tokens.map { TokenText.yi($0.tokens) } }
-    private var rightWing: CGFloat { present || tokenLabel != nil ? wing : 0 }
-    private var collapsedWidth: CGFloat { model.notchWidth + rightWing }
-    /// The notch part stays on the camera while the wing sticks out to the right.
-    private var shift: CGFloat { rightWing / 2 }
+    private var collapsedWidth: CGFloat { model.notchWidth + 2 * wing }
     /// Where the right wing starts, just past the camera.
     private var rightEdge: CGFloat { (model.windowFrame.width + model.notchWidth) / 2 }
-    /// How far things drift up or down when the wing switches between tokens and Bead.
+    /// Where the left wing starts, at its outer end.
+    private var leftEdge: CGFloat { (model.windowFrame.width - model.notchWidth) / 2 - wing }
+    /// How far the icon and Bead drift as they come and go.
     private var drift: CGFloat { reduceMotion ? 0 : 7 }
 
     private var shape: UnevenRoundedRectangle {
@@ -37,9 +36,6 @@ struct NotchView: View {
             shape
                 .fill(.black)
                 .frame(width: collapsedWidth, height: model.notchHeight)
-                .offset(x: shift)
-                .animation(.notchOpen, value: present)
-                .animation(.notchOpen, value: tokenLabel == nil)
             tapTarget
         }
         .frame(width: model.windowFrame.width, height: model.windowFrame.height, alignment: .top)
@@ -52,10 +48,9 @@ struct NotchView: View {
 
     // MARK: - Click
 
-    /// Today's tokens in the right wing, dimmed, while nothing needs you. Clicking it opens the dashboard.
+    /// Today's tokens in the right wing, always shown and dimmed. Clicking it opens the dashboard.
     private var tokenText: some View {
-        let known = tokenLabel != nil
-        let shown = known && !present
+        let shown = tokenLabel != nil
         return Text(tokenLabel ?? " ")
             .font(.system(size: 10.5, weight: .medium))
             .monospacedDigit()
@@ -66,7 +61,7 @@ struct NotchView: View {
             .contentShape(Rectangle())
             .onTapGesture { DashboardWindow.shared.show() }
             .help("Today's tokens. Click to open the tokenboard dashboard")
-            .offset(x: rightEdge + (known ? 0 : -wing * 0.6), y: present ? -drift : 0)
+            .offset(x: rightEdge, y: shown ? 0 : drift)
             .opacity(shown ? 1 : 0)
             .blur(radius: shown || reduceMotion ? 0 : 3)
             .animation(shown ? .notchOpen.delay(0.12) : .easeIn(duration: 0.2), value: shown)
@@ -76,7 +71,6 @@ struct NotchView: View {
     private var tapTarget: some View {
         Color.clear
             .frame(width: collapsedWidth, height: model.notchHeight)
-            .offset(x: shift)
             .contentShape(Rectangle())
             .onTapGesture {
                 store.clearArrival()
@@ -96,8 +90,7 @@ struct NotchView: View {
 
     // MARK: - Bead
 
-    /// The right wing while something needs you, from the camera out: 3pt, the app icon (12pt), 4pt,
-    /// Bead (18pt), then room for its count.
+    /// The left wing, outside in: 3pt, the app icon (12pt), 4pt, Bead (18pt), then room for its count.
     private static let iconSize: CGFloat = 12
 
     /// Which app wants you, beside Bead; it comes and goes with Bead.
@@ -107,15 +100,15 @@ struct NotchView: View {
             .scaleEffect(present ? 1 : 0.8)
             .opacity(present ? 0.95 : 0)
             .blur(radius: present || reduceMotion ? 0 : 3)
-            .offset(x: rightEdge + 3, y: (model.notchHeight - size) / 2 + (present ? 0 : drift))
+            .offset(x: leftEdge + 3, y: (model.notchHeight - size) / 2 + (present ? 0 : drift))
             .animation(present ? .notchOpen.delay(0.12) : .easeIn(duration: 0.15), value: present)
             .allowsHitTesting(false)
     }
 
-    /// Bead sits in the right wing while something needs you, and is gone otherwise.
+    /// Bead sits in the left wing while something needs you; the wing stays out, empty, otherwise.
     private var bead: some View {
         let size = NotchModel.wingBeadSize
-        let center = CGPoint(x: rightEdge + 3 + Self.iconSize + 4 + size / 2, y: model.notchHeight / 2)
+        let center = CGPoint(x: leftEdge + 3 + Self.iconSize + 4 + size / 2, y: model.notchHeight / 2)
         return BeadView(
             mood: store.mood, size: size, runRange: 2, gaze: gaze(from: center), pokes: pokes,
             badge: max(store.visible.count, 1)

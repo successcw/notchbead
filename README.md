@@ -228,9 +228,9 @@ model is called in the database, hover over it on the 模型 (model) tab: the ra
 
 - **Things that need you**: an agent in Orca waiting for approval, hitting an error, or finishing while you were in
   another app or another Orca pane or window; a WorkBuddy session interrupted, asking you something or finished; a ChatGPT desktop
-  app task finished while you weren't watching. The notch never changes size: its right wing shows today's tokens, and when
-  something needs you the figure fades upward and the icon of the app that wants you (several apps take turns, each
-  fading upward) and Bead, with the count on its corner, take its place; clicking the notch goes straight to the next item, most urgent first (for Orca, the exact pane), and
+  app task finished while you weren't watching. The notch never changes size: a small wing is always out on each side. The right
+  one shows today's tokens; when something needs you, the icon of the app that wants you (several apps take turns,
+  each fading upward) and Bead, with the count on its corner, appear in the left one; clicking the notch goes straight to the next item, most urgent first (for Orca, the exact pane), and
   items clear by themselves once handled. Each new item makes Bead hop and plays a short chime (three soft
   rising notes); untick Play Sound in the notch's right-click menu to silence it.
 - **Today's tokens**: always shown, dimmed, on the right of the notch, in 亿 (100 million), such as `2.01亿`.
