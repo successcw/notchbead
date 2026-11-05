@@ -18,7 +18,7 @@ The right of the notch always shows today's token use in 亿 (10^8), dimmed, suc
 | WorkBuddy | `~/.workbuddy/workbuddy.db`, opened read-only (`mode=ro`): session title and status, compared from one poll to the next |
 | ChatGPT | `~/.codex/state_5.sqlite`, opened read-only: desktop-app thread names and log paths. Then only the end of each changed thread's log, for the last `task_started` / `task_complete` / `turn_aborted` line; message text is skipped unread |
 
-| tokenboard | `GET http://127.0.0.1:8787/api/breakdown` for today, every minute and on each arrival; the dashboard window loads the same address. Point it elsewhere with `defaults write io.github.successcw.notchbead tokenboardURL http://127.0.0.1:<port>` |
+| tokenboard | `GET http://127.0.0.1:8787/api/breakdown` for today, every 15 seconds, on each arrival, and right after 采集 (collect now) in the dashboard window; the dashboard window loads the same address. Point it elsewhere with `defaults write io.github.successcw.notchbead tokenboardURL http://127.0.0.1:<port>` |
 
 NotchBead connects to nothing but tokenboard on this Mac, and writes nothing but its own settings.
 

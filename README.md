@@ -233,7 +233,8 @@ model is called in the database, hover over it on the 模型 (model) tab: the ra
   items clear by themselves once handled. Each new item makes Bead hop and plays a short chime (three soft
   rising notes); untick Play Sound in the notch's right-click menu to silence it.
 - **Today's tokens**: always shown, dimmed, on the right of the notch, in 亿 (100 million), such as `2.01亿`.
-  It comes from the tokenboard service (`/api/breakdown`) every minute; the service collects every 5 minutes,
+  It comes from the tokenboard service (`/api/breakdown`) every 15 seconds, and at once after you click 采集
+  (collect now) in the dashboard window; the service itself collects every 5 minutes,
   so it can trail live use by a few minutes. Hidden when the service isn't running.
 - **Dashboard window**: click the token figure, choose Open Dashboard from the right-click menu, or open
   NotchBead again from Spotlight, and the same page opens in a native window (in the Dock and Cmd-Tab while

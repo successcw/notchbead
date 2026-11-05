@@ -24,6 +24,7 @@ final class AttentionStore {
     private var dismissed: Set<String>
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
+    @ObservationIgnored private var ingestObserver: NSObjectProtocol?
     @ObservationIgnored private var seen: Set<String>?
     @ObservationIgnored private var arrivalTask: Task<Void, Never>?
     @ObservationIgnored private let demoStart: Date? = .now
@@ -31,6 +32,9 @@ final class AttentionStore {
     @ObservationIgnored private var visited: [String] = []
 
     private static let interval: Duration = .seconds(3)
+    /// How often today's total is re-read without a nudge: catches the service's own collection
+    /// every 5 minutes and collections started from a browser. It's one local request.
+    private static let tokenInterval: TimeInterval = 15
     private static let dismissedKey = "dismissed"
     private static let soundKey = "playsSound"
 
@@ -74,10 +78,16 @@ final class AttentionStore {
                 try? await Task.sleep(for: Self.interval)
             }
         }
+        // The dashboard window's 采集 button just collected: show the new total now, not on the next check.
+        ingestObserver = NotificationCenter.default.addObserver(
+            forName: DashboardWindow.didIngest, object: nil, queue: .main
+        ) { [weak self] _ in
+            _ = MainActor.assumeIsolated { Task { await self?.refreshTokens() } }
+        }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { Task { await self?.refresh() } }
+            _ = MainActor.assumeIsolated { Task { await self?.refresh() } }
         }
     }
 
@@ -110,7 +120,7 @@ final class AttentionStore {
             UserDefaults.standard.set(Array(kept), forKey: Self.dismissedKey)
         }
         visited.removeAll { !current.contains($0) }
-        if noticeArrivals() || tokensCheckedAt.map({ Date.now.timeIntervalSince($0) > 60 }) ?? true {
+        if noticeArrivals() || tokensCheckedAt.map({ Date.now.timeIntervalSince($0) > Self.tokenInterval }) ?? true {
             await refreshTokens()
         }
     }

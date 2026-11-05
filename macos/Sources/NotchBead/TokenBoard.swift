@@ -72,8 +72,26 @@ enum TokenText {
 /// tokenboard's web page in a window of its own, so it lives in the Dock and in Cmd-Tab
 /// while it's open instead of in a browser tab. Closing it puts NotchBead back in the notch only.
 @MainActor
-final class DashboardWindow: NSObject, NSWindowDelegate, WKNavigationDelegate {
+final class DashboardWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     static let shared = DashboardWindow()
+    /// Posted when the page's 采集 (collect now) button has finished, so the notch number updates at once.
+    static let didIngest = Notification.Name("TokenBoardDidIngest")
+
+    /// Tells NotchBead when the page's own POST /api/ingest comes back.
+    private static let ingestWatcher = """
+    (() => {
+      const original = window.fetch;
+      window.fetch = function (input, init) {
+        const url = typeof input === "string" ? input : (input && input.url) || "";
+        const method = ((init && init.method) || (input && input.method) || "GET").toUpperCase();
+        const result = original.apply(this, arguments);
+        if (method === "POST" && url.indexOf("/api/ingest") !== -1) {
+          result.then(() => window.webkit.messageHandlers.tokenboard.postMessage("ingested"), () => {});
+        }
+        return result;
+      };
+    })();
+    """
     private var window: NSWindow?
     private var webView: WKWebView?
 
@@ -91,6 +109,9 @@ final class DashboardWindow: NSObject, NSWindowDelegate, WKNavigationDelegate {
     private func build() {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        configuration.userContentController.addUserScript(
+            WKUserScript(source: Self.ingestWatcher, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        configuration.userContentController.add(self, name: "tokenboard")
         let web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = self
         web.underPageBackgroundColor = .windowBackgroundColor
@@ -113,6 +134,11 @@ final class DashboardWindow: NSObject, NSWindowDelegate, WKNavigationDelegate {
 
     private func load() {
         webView?.load(URLRequest(url: TokenBoard.baseURL))
+    }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "tokenboard", message.body as? String == "ingested" else { return }
+        NotificationCenter.default.post(name: Self.didIngest, object: nil)
     }
 
     func windowWillClose(_ notification: Notification) {
