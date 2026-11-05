@@ -160,7 +160,7 @@ enum OrcaAttention {
         let parts = paneKey.split(separator: ":", maxSplits: 1).map(String.init)
         let list = Shell.run(cli, ["terminal", "list", "--json"])
         if parts.count == 2, let handle = terminalHandle(in: Data(list.output.utf8), tabID: parts[0], leafID: parts[1]) {
-            Shell.run(cli, ["terminal", "switch", "--terminal", handle])
+            _ = Shell.run(cli, ["terminal", "switch", "--terminal", handle])
         }
         Task { @MainActor in activate(bundleID: bundleID) }
     }
@@ -480,11 +480,18 @@ enum ChatGPTAttention {
     }
 }
 
+/// Brings an app to the front. NotchBead is never the active app, and since macOS 14 a plain
+/// `NSRunningApplication.activate()` from a background app is quietly ignored, so this goes through
+/// Launch Services instead, like the Dock or `open -a`, which works from the background.
 @MainActor
 func activate(bundleID: String) {
-    if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
-        app.activate()
-    } else if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.activate()
+        return
+    }
+    let configuration = NSWorkspace.OpenConfiguration()
+    configuration.activates = true
+    NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in
+        if let error { NSLog("NotchBead: could not bring \(bundleID) forward: \(error.localizedDescription)") }
     }
 }
