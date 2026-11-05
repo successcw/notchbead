@@ -94,8 +94,8 @@ final class AttentionStore {
         var found = orca.items + Array(workBuddy.items.values) + Array(chatGPT.items.values)
         let busy = orca.working + WorkBuddyAttention.workingCount(sessions) + ChatGPTAttention.workingCount(threads.snapshots)
         if busy != working { working = busy }
-        // HEED_DEMO=1 adds a sample item a few seconds in, to see the notch without waiting on an agent.
-        if ProcessInfo.processInfo.environment["HEED_DEMO"] == "1", let demoStart, Date.now.timeIntervalSince(demoStart) > 4 {
+        // NOTCHBEAD_DEMO=1 adds a sample item a few seconds in, to see the notch without waiting on an agent.
+        if ProcessInfo.processInfo.environment["NOTCHBEAD_DEMO"] == "1", let demoStart, Date.now.timeIntervalSince(demoStart) > 4 {
             found.append(AttentionItem(id: "demo", source: .orca, kind: .waiting, title: "π - teacher wants to run a command",
                                        project: "teacher", agent: "pi", since: demoStart, target: .app(bundleID: OrcaAttention.bundleID)))
         }
@@ -167,7 +167,7 @@ final class AttentionStore {
             Task.detached(priority: .userInitiated) { OrcaAttention.open(paneKey: paneKey) }
         case .app(let bundleID):
             activate(bundleID: bundleID)
-            // WorkBuddy and ChatGPT can't tell Heed when you've looked, so going there counts as handling it.
+            // WorkBuddy and ChatGPT can't tell NotchBead when you've looked, so going there counts as handling it.
             dismiss(item)
         }
     }
@@ -186,7 +186,7 @@ final class AttentionStore {
             do {
                 if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             } catch {
-                NSLog("Heed: could not change login item: \(error.localizedDescription)")
+                NSLog("NotchBead: could not change login item: \(error.localizedDescription)")
             }
         }
     }

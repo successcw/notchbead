@@ -3,10 +3,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "Heed",
+    name: "NotchBead",
     platforms: [.macOS(.v26)],
     targets: [
-        .executableTarget(name: "Heed", path: "Sources/Heed"),
-        .testTarget(name: "HeedTests", dependencies: ["Heed"], path: "Tests/HeedTests"),
+        .executableTarget(name: "NotchBead", path: "Sources/NotchBead"),
+        .testTarget(name: "NotchBeadTests", dependencies: ["NotchBead"], path: "Tests/NotchBeadTests"),
     ]
 )

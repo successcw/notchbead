@@ -84,9 +84,9 @@ struct NotchView: View {
                 Toggle("Play Sound", isOn: Binding(get: { store.playsSound }, set: { store.playsSound = $0; if $0 { ArrivalSound.play() } }))
                 Toggle("Open at Login", isOn: Binding(get: { store.opensAtLogin }, set: { store.opensAtLogin = $0 }))
                 Divider()
-                Button("Quit Heed") { NSApp.terminate(nil) }
+                Button("Quit NotchBead") { NSApp.terminate(nil) }
             }
-            .help(store.next.map { "Go to: \($0.title)" } ?? "Heed: nothing needs you")
+            .help(store.next.map { "Go to: \($0.title)" } ?? "NotchBead: nothing needs you")
     }
 
     // MARK: - Bead

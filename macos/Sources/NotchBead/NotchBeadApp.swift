@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct HeedApp: App {
+struct NotchBeadApp: App {
     @State private var store: AttentionStore
     @State private var display: DisplayController
     @State private var menuBead: MenuBarBead
@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
     }
 
-    /// Opening Heed again while it runs (from Spotlight, Finder or the Dock) brings up the dashboard.
+    /// Opening NotchBead again while it runs (from Spotlight, Finder or the Dock) brings up the dashboard.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         MainActor.assumeIsolated { DashboardWindow.shared.show() }
         return false

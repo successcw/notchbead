@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Heed
+@testable import NotchBead
 
 @Suite struct TokenBoardTests {
     @Test func sumsEverySourceAndMarksPartialCost() throws {

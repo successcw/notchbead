@@ -1,4 +1,4 @@
-"""Heed's arrival sound: three soft rising pips (C6, E6, G6), made from sine waves.
+"""NotchBead's arrival sound: three soft rising pips (C6, E6, G6), made from sine waves.
 
 Run `make sound` to rewrite SupportFiles/Arrival.wav after changing it."""
 import math, struct, sys, wave

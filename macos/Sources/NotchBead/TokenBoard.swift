@@ -14,7 +14,7 @@ struct TokenTotal: Equatable, Sendable {
 }
 
 enum TokenBoard {
-    /// The service's address. `defaults write io.github.successcw.heed tokenboardURL http://127.0.0.1:8798` points elsewhere.
+    /// The service's address. `defaults write io.github.successcw.notchbead tokenboardURL http://127.0.0.1:8798` points elsewhere.
     static var baseURL: URL {
         let custom = UserDefaults.standard.string(forKey: "tokenboardURL").flatMap(URL.init(string:))
         return custom ?? URL(string: "http://127.0.0.1:8787")!
@@ -70,7 +70,7 @@ enum TokenText {
 }
 
 /// tokenboard's web page in a window of its own, so it lives in the Dock and in Cmd-Tab
-/// while it's open instead of in a browser tab. Closing it puts Heed back in the notch only.
+/// while it's open instead of in a browser tab. Closing it puts NotchBead back in the notch only.
 @MainActor
 final class DashboardWindow: NSObject, NSWindowDelegate, WKNavigationDelegate {
     static let shared = DashboardWindow()

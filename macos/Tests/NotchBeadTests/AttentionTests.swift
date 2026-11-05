@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Heed
+@testable import NotchBead
 
 struct OrcaAttentionTests {
     static func worktree(active: Bool, unread: Bool, agents: String) -> String {
@@ -171,7 +171,7 @@ struct ChatGPTAttentionTests {
     }
 
     @Test func readsTheEndOfARealFile() throws {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("heed-\(UUID().uuidString).jsonl")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("notchbead-\(UUID().uuidString).jsonl")
         defer { try? FileManager.default.removeItem(at: url) }
         var text = #"{"type":"event_msg","payload":{"type":"task_complete"}}"# + "\n"
         text += String(repeating: #"{"type":"response_item","payload":{"type":"message","content":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}"# + "\n", count: 6000)

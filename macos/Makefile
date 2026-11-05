@@ -1,4 +1,4 @@
-APP_NAME   = Heed
+APP_NAME   = NotchBead
 BUNDLE_DIR = $(APP_NAME).app
 ARCHS      = --arch arm64 --arch x86_64
 

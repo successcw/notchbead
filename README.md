@@ -1,65 +1,89 @@
-# tokenboard
+<p align="center"><img src="docs/media/promo-en.gif" alt="NotchBead demo: Bead pops out of the notch when an agent needs you; clicking today's token count opens the usage dashboard" width="100%"></p>
 
-![tokenboard 和 Heed 演示](docs/media/promo.gif)
+<p align="center"><b>English</b> · <a href="README.zh-CN.md">简体中文</a></p>
 
-<sub>演示用的是虚构数据。[高清 MP4（带声音）](docs/media/promo.mp4) · [看板截图](docs/media/dashboard.png)</sub>
+<p align="center"><sub>The demo uses made-up data. <a href="docs/media/promo-en.mp4">HD video (with sound)</a> · <a href="docs/media/dashboard.png">Dashboard screenshot</a></sub></p>
 
-本机的 AI 编程助手 token 用量看板。它把 **pi**、**claude-code**、**codex**、
-**workbuddy** 四个 coding agent 写在本地日志里的用量，汇总进一个 SQLite 数据库，
-并用一个只监听 `127.0.0.1` 的本地网页把每天的趋势画出来。
-配套的 Mac 刘海小程序 **Heed** 把今日用量常驻在刘海旁，agent 有事时提醒你（见
-[Mac 刘海伴侣](#mac-刘海伴侣macos)）。
+# NotchBead
 
-只依赖 Python 3.13 标准库，全部数据留在本机，不上传、不联网。
+A keeper for your AI coding agents that lives in the Mac notch, plus a local token-usage dashboard.
 
-- 网页：`http://127.0.0.1:8787/`（仅本机可访问）
-- 数据库：`~/Library/Application Support/tokenboard/usage.db`
-- 服务日志：`~/Library/Logs/tokenboard/<label>.log`
+- **Notch alerts**: when an agent in Orca waits for your approval, hits an error or finishes, a WorkBuddy
+  session is interrupted, or a task in the ChatGPT desktop app completes, Bead (a small blue character) pops out of the notch with a
+  short chime. One click takes you straight to that window.
+- **Today's usage, always visible**: the right side of the notch always shows today's tokens (such as `2.01亿`;
+  亿 = 100 million).
+- **Usage dashboard (tokenboard)**: collects the usage that **pi**, **claude-code**, **codex** (including the
+  ChatGPT desktop app) and **workbuddy** write to their local logs into SQLite, and charts it by day, agent,
+  model and project, with cost.
+- **Everything stays on your Mac**: logs are read-only, the server listens on `127.0.0.1` only, nothing is
+  uploaded. MIT licensed.
 
-## 数据来源
+## Quick start
 
-日志只读，tokenboard 从不修改或删除这些文件：
+```bash
+git clone https://github.com/successcw/notchbead.git
+cd notchbead
+scripts/install.sh          # the dashboard, as a background service: http://127.0.0.1:8787/
+cd macos && make install    # the notch app, installed to /Applications
+```
 
-| 来源 | 日志位置 | 说明 |
+Needs macOS and Python 3.13+ (the dashboard uses only the standard library); the notch app needs macOS 26 and
+Xcode 26. Installing `zstd` is optional (it reads codex's compressed history).
+
+Where the dashboard keeps things:
+
+- Web page: `http://127.0.0.1:8787/` (this Mac only)
+- Database: `~/Library/Application Support/tokenboard/usage.db`
+- Service log: `~/Library/Logs/tokenboard/<label>.log`
+
+The dashboard's interface is in Chinese. The labels this page mentions: 今日 today, 近7日 last 7 days,
+近30日 last 30 days, 模型 model, 项目 project, 设备 device, 成本 cost, 部分 partial.
+
+## Data sources
+
+Logs are read-only; tokenboard never changes or deletes them:
+
+| Source | Log location | Notes |
 | --- | --- | --- |
-| pi | `~/.pi/agent/sessions/**/*.jsonl` | 含 `forks/` 子目录；fork 会复制父会话的消息，按 `id + timestamp` 去重，只算一次 |
-| claude-code | `~/.claude/projects/**/*.jsonl` | 一个 API 响应会写成多行（每个 content block 一行），按 `message.id + requestId` 去重；`<synthetic>` 消息跳过 |
-| codex | `~/.codex/sessions/**/*.jsonl[.zst]`、`~/.codex/archived_sessions/**/*.jsonl[.zst]` | 优先 `token_usage_record`（按 `response_id` 去重）；老文件没有该记录时才回退到 `token_count`；`.zst` 通过 `zstd -dc` 解压 |
-| workbuddy | `~/.workbuddy/projects/**/*.jsonl` | 任何带 `providerData.rawUsage` 的行都算用量；`prompt_tokens` 含缓存读写，会先扣掉 `cache_read`/`cache_write`；按 `messageId + prompt/completion tokens` 去重（同一个 `messageId` 的两次不同调用都算）；`tool-results/` 目录跳过 |
+| pi | `~/.pi/agent/sessions/**/*.jsonl` | Includes `forks/`; a fork copies its parent's messages, so rows are de-duplicated by `id + timestamp` and counted once |
+| claude-code | `~/.claude/projects/**/*.jsonl` | One API response is written as several lines (one per content block), de-duplicated by `message.id + requestId`; `<synthetic>` messages are skipped |
+| codex | `~/.codex/sessions/**/*.jsonl[.zst]`, `~/.codex/archived_sessions/**/*.jsonl[.zst]` | Prefers `token_usage_record` (de-duplicated by `response_id`); falls back to `token_count` only for old files without it; `.zst` is read through `zstd -dc`. The ChatGPT desktop app writes here too, so its usage counts under codex |
+| workbuddy | `~/.workbuddy/projects/**/*.jsonl` | Any line with `providerData.rawUsage` counts; `prompt_tokens` includes cache reads and writes, which are subtracted first; de-duplicated by `messageId + prompt/completion tokens` (two different calls with the same `messageId` both count); `tool-results/` is skipped |
 
-可用环境变量覆盖路径：`TOKENBOARD_PI_DIR`、`TOKENBOARD_CLAUDE_DIR`、
-`TOKENBOARD_CODEX_DIR`、`TOKENBOARD_WORKBUDDY_DIR`、`TOKENBOARD_DB`、
-`TOKENBOARD_DEVICE`、`TOKENBOARD_ALIASES`。
+Paths can be overridden with `TOKENBOARD_PI_DIR`, `TOKENBOARD_CLAUDE_DIR`, `TOKENBOARD_CODEX_DIR`,
+`TOKENBOARD_WORKBUDDY_DIR`, `TOKENBOARD_DB`, `TOKENBOARD_DEVICE` and `TOKENBOARD_ALIASES`.
 
-## 为什么服务必须常驻
+## Why the service has to keep running
 
-Claude Code 会自动删除旧的 transcript，pi / codex 也会压缩或清理历史日志。
-**原始日志是短期的，数据库才是长期记录。** 所以后台服务需要一直运行：
+Claude Code deletes old transcripts on its own, and pi and codex compress or clean up their history.
+**The raw logs are short-lived; the database is the long-term record.** So the background service runs all
+the time:
 
-- 启动时立刻采集一次；
-- 之后每 300 秒采集一次；
-- 只重新解析 `(size, mtime)` 变化的文件；
-- 写入用 `INSERT OR IGNORE`，重复采集永远不会重复计数（幂等）；
-- 某个文件解析失败只会记录错误并跳过，下次运行会重试，不会中断其它文件。
+- it collects once at start-up;
+- then every 300 seconds;
+- it only re-reads files whose `(size, mtime)` changed;
+- it writes with `INSERT OR IGNORE`, so collecting twice never counts twice;
+- a file that fails to parse is logged and skipped, and retried next time, without stopping the others.
 
-如果服务停了几天，那几天的历史不会丢（日志还在时下次采集会补上）；
-但如果日志在服务停摆期间被工具删掉，那段用量就无法恢复。
+If the service is off for a few days, nothing is lost as long as the logs are still there: the next run
+catches up. Usage whose logs were deleted while the service was off can't be recovered.
 
-## 指标定义
+## Metrics
 
-| 指标 | 含义 |
+| Metric | Meaning |
 | --- | --- |
-| 总处理量（含 cache） | `input + output + cache_read + cache_write`，包含缓存命中与写入 |
-| 输入+输出 | `input + output`，不含缓存（最接近"实际计算量"） |
-| 仅输入 | `input`，未命中缓存的输入 token |
-| 仅输出 | `output`，包含推理（reasoning）token |
-| 成本 (USD) | 见下节；有任一记录成本未知时，总计标注为「部分」 |
+| Total, cache included (总处理量) | `input + output + cache_read + cache_write` |
+| Input + output (输入+输出) | `input + output`, no cache (closest to the actual compute) |
+| Input only (仅输入) | `input`, input tokens that missed the cache |
+| Output only (仅输出) | `output`, including reasoning tokens |
+| Cost (USD) | See below; when any row's cost is unknown, the total is marked 部分 (partial) |
 
-## 模型别名（把多个原始模型名合并显示）
+## Model aliases (showing several raw model names as one)
 
-有些上游会用不同的名字记录同一个模型（例如 `deepseek-flash` 和
-`deepseek-v4.1-flash`），「模型」标签页里就会拆成几行。用
-`tokenboard/model_aliases.json` 可以在**查询时**把它们合并成一个显示名：
+Some providers log the same model under different names (for example `deepseek-flash` and
+`deepseek-v4.1-flash`), which splits it into several rows on the 模型 (model) tab.
+`tokenboard/model_aliases.json` merges them into one display name **at query time**:
 
 ```json
 {
@@ -69,99 +93,98 @@ Claude Code 会自动删除旧的 transcript，pi / codex 也会压缩或清理�
 }
 ```
 
-- 键是**归一化后的模型名**（取日志里模型字符串最后一个 `/` 之后、小写、去空格），
-  值是合并后在「模型」标签页显示的名字；键和值都会再统一转小写、去空格。
-- 以 `_` 开头的键是注释，会被忽略。
-- 只影响「模型」标签页的分组：数据库里存的原始模型名不变，成本计算也仍按原始模型名查价。
-  鼠标停在合并后的名字上，会列出它背后的所有原始模型名。
-- 保存即生效，不需要重启服务；文件缺失或格式错误就当作「没有别名」，不会报错。
-- 环境变量 `TOKENBOARD_ALIASES` 可以指向另一份别名文件。
+- Keys are **normalized model names** (the part of the logged model string after the last `/`, lower-cased,
+  spaces removed); values are the name shown on the model tab. Both are lower-cased and trimmed again.
+- Keys starting with `_` are comments.
+- Only the model tab's grouping changes: the database keeps the raw names, and cost is still looked up by the
+  raw name. Hovering over a merged name lists the raw names behind it.
+- Takes effect on save, without a restart; a missing or malformed file just means no aliases.
+- `TOKENBOARD_ALIASES` can point to another alias file.
 
-## 成本规则
+## Cost rules
 
-1. **日志里自带成本时优先用日志**：pi 的 `usage.cost.total` 直接入库。
-2. 否则查 `tokenboard/pricing.json`（单位：**美元 / 100 万 token**），按归一化后的
-   模型名匹配（取最后一个 `/` 之后、小写）。claude-code 与 codex 走这条路。
-3. 模型不在价格表里 → 该行事件的成本**未知**：同一分组里如果还有已定价（或日志自带成本）
-   的事件，网页照常显示**已知小计**并加一个小标记「部分」；只有当整个分组都没有已知成本时
-   才显示 `—`。未知成本不计入合计，合计因此会标记「部分”；命令行 `summary --metric cost`
-   同样按这套规则计算，并在表下打印 `note: 部分（partial）…` 提醒。
-4. `cache_write` 按 **1 小时 TTL** 的价格计价（Claude Code 写缓存用的是这个档位，
-   通常是 input 单价的 2 倍）。
-5. GPT / DeepSeek 等模型目前**未定价**（价格表里没有它们），所以成本合计通常显示
-   「部分」；想看到完整成本，把自己的价格加进 `pricing.json` 即可。
+1. **A cost written in the log wins**: pi's `usage.cost.total` is stored as is.
+2. Otherwise `tokenboard/pricing.json` is used (**USD per 1M tokens**), matched by normalized model name.
+   claude-code and codex go this way.
+3. A model missing from the price list has an **unknown** cost. If the same group has other priced events,
+   the page shows the **known subtotal** with a small 部分 (partial) mark; only a group with no known cost at
+   all shows `—`. Unknown costs are left out of totals, which are then marked partial. The command line
+   `summary --metric cost` follows the same rules and prints a `note: 部分（partial）…` line.
+4. `cache_write` is priced at the **1-hour TTL** rate (what Claude Code writes, usually twice the input price).
+5. GPT, DeepSeek and others are **not priced** out of the box, so totals usually show partial. Add your own
+   prices to `pricing.json` to see full costs.
 
-## 安装（launchd 常驻服务）
+## Install (launchd background service)
 
 ```bash
 scripts/install.sh
 ```
 
-脚本会做这些事：
+The script:
 
-- 解析当前 `python3` 的绝对路径，并检查版本 **≥ 3.13**（不满足会给出明确报错）；
-- 检查 `zstd` 是否可用（codex 的 `.zst` 历史需要它），缺失时给出警告；
-- 在 `~/Library/LaunchAgents/<label>.plist` 写入 LaunchAgent：
-  - `ProgramArguments`：`<python3> -m tokenboard serve --port <port>`
-  - `WorkingDirectory`：仓库根目录
-  - `RunAtLoad` / `KeepAlive` 为 true，`ThrottleInterval` 30 秒
-  - 输出与错误都写到 `~/Library/Logs/tokenboard/<label>.log`
-  - `PATH` 固定为 `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`
-    （launchd 默认 PATH 不含 Homebrew，否则找不到 `zstd`），
-    并设置 `PYTHONDONTWRITEBYTECODE=1`
-- 如果同名服务已在运行，先 `launchctl bootout` 再 `launchctl bootstrap`，可反复执行；
-- 最后轮询 `http://127.0.0.1:<port>/api/meta` 最多 60 秒：成功打印访问地址，
-  失败则打印日志尾部并以非零状态退出。
+- finds the absolute path of `python3` and checks it is **3.13 or newer** (with a clear error if not);
+- checks for `zstd` (codex's `.zst` history needs it) and warns if it's missing;
+- writes a LaunchAgent to `~/Library/LaunchAgents/<label>.plist`:
+  - `ProgramArguments`: `<python3> -m tokenboard serve --port <port>`
+  - `WorkingDirectory`: the repository root
+  - `RunAtLoad` / `KeepAlive` true, `ThrottleInterval` 30 seconds
+  - output and errors go to `~/Library/Logs/tokenboard/<label>.log`
+  - `PATH` is set to `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin` (launchd's default has no Homebrew,
+    so `zstd` wouldn't be found), plus `PYTHONDONTWRITEBYTECODE=1`
+- if the service is already running, it runs `launchctl bootout` then `launchctl bootstrap`, so it can be
+  re-run safely;
+- finally polls `http://127.0.0.1:<port>/api/meta` for up to 60 seconds: on success it prints the address,
+  otherwise it prints the end of the log and exits non-zero.
 
-可覆盖的环境变量：
+Environment variables you can override:
 
-| 变量 | 默认值 | 用途 |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `TB_LABEL` | `com.tokenboard.server` | LaunchAgent 标签（plist 与日志文件名） |
-| `TB_PORT` | `8787` | 网页端口（只绑定 127.0.0.1） |
-| `TOKENBOARD_DB` | `~/Library/Application Support/tokenboard/usage.db` | 数据库路径，设置后会写进 plist |
-| `TB_PYTHON` | PATH 上的 `python3` | 指定解释器 |
+| `TB_LABEL` | `com.tokenboard.server` | LaunchAgent label (plist and log file name) |
+| `TB_PORT` | `8787` | Web port (bound to 127.0.0.1 only) |
+| `TOKENBOARD_DB` | `~/Library/Application Support/tokenboard/usage.db` | Database path, written into the plist when set |
+| `TB_PYTHON` | `python3` on PATH | Interpreter to use |
 
-例：换端口和数据库跑一份独立实例
+For example, a separate instance on another port and database:
 
 ```bash
 TB_LABEL=com.tokenboard.test TB_PORT=8798 TOKENBOARD_DB=/tmp/tb.db scripts/install.sh
 ```
 
-## 卸载
+## Uninstall
 
 ```bash
-scripts/uninstall.sh          # 或 TB_LABEL=com.tokenboard.test scripts/uninstall.sh
+scripts/uninstall.sh          # or TB_LABEL=com.tokenboard.test scripts/uninstall.sh
 ```
 
-只做两件事：停止服务、删除 `~/Library/LaunchAgents/<label>.plist`。
-**不会删除数据库，也不会删除日志**，脚本最后会打印它们的位置。
-数据库是长期记录，确实不需要时请手动删除。
+It stops the service and removes `~/Library/LaunchAgents/<label>.plist`. **It deletes neither the database
+nor the logs**, and prints where they are. The database is your long-term record; delete it by hand only if
+you really don't need it.
 
-## 命令行用法
+## Command line
 
-在**仓库根目录**执行（clone 下来的 tokenboard 目录）：
+Run from the **repository root**:
 
 ```bash
-cd <仓库目录>
+cd notchbead
 
-# 采集一次，打印每个来源的新增行数 / 解析文件数 / 错误数
+# collect once; prints new rows / files parsed / errors per source
 python3 -m tokenboard ingest
 
-# 按天 × 来源打印表格（默认近 7 天，指标 total）
+# a day × source table (default: last 7 days, metric total)
 python3 -m tokenboard summary --days 3 --metric io
 
-# 成本：与网页同一套规则（日志成本 → pricing.json 估算 → 未知），
-# 有未定价模型时会在表下打印一行「部分（partial）」提示
+# cost, by the same rules as the page (logged cost → pricing.json → unknown);
+# prints a 部分（partial）note when some models have no price
 python3 -m tokenboard summary --days 30 --metric cost
 
-# 前台启动网页服务（默认 8787）
+# run the web server in the foreground (default 8787)
 python3 -m tokenboard serve --port 8787
 ```
 
-`--metric` 可选：`total`（默认）、`io`、`input`、`output`、`cost`。
+`--metric` is one of `total` (default), `io`, `input`, `output`, `cost`.
 
-`summary --metric cost` 的输出示例（claude-code 有价格、codex 的 GPT 未定价）：
+Example of `summary --metric cost` (claude-code priced, codex's GPT unpriced):
 
 ```
 metric: cost (USD)   range: 2026-10-03 .. 2026-11-01
@@ -172,21 +195,18 @@ note: 部分（partial）— 812 rows in range have no known price, so the total
 cover models listed in tokenboard/pricing.json
 ```
 
-也就是说：有价格的模型照常计入，未定价模型的行的成本按「未知」处理（不计入合计），
-并在末尾用 `note: 部分（partial）` 提醒合计只覆盖已知价格部分。
+HTTP API (127.0.0.1 only):
 
-HTTP 接口（仅 127.0.0.1）：
+- `GET /api/meta` → sources, devices, first and last day, last collection time
+- `GET /api/daily?start=&end=&metric=` → per-day series by source (days without data are 0)
+- `GET /api/breakdown?start=&end=&metric=&by=source|model|device|project` → shares
+- `POST /api/ingest` → collect now; returns counts per source
+- `GET /`, `GET /static/*` → the page and its assets
 
-- `GET /api/meta` → 来源、设备、首末日期、最近采集时间
-- `GET /api/daily?start=&end=&metric=` → 每天的按来源序列（区间内无数据的日子补 0）
-- `GET /api/breakdown?start=&end=&metric=&by=source|model|device|project` → 占比明细
-- `POST /api/ingest` → 立即采集，返回各来源计数
-- `GET /`、`GET /static/*` → 网页与静态资源
+## Adding model prices
 
-## 如何新增模型价格
-
-编辑 `tokenboard/pricing.json`（单位：美元 / 100 万 token，键是归一化模型名，
-以 `_` 开头的键是注释，会被忽略）：
+Edit `tokenboard/pricing.json` (USD per 1M tokens; keys are normalized model names; keys starting with `_`
+are comments):
 
 ```json
 {
@@ -196,46 +216,47 @@ HTTP 接口（仅 127.0.0.1）：
 }
 ```
 
-保存后无需重启：服务每次请求都会检查文件是否变动，自动重新加载。
-历史记录的估算成本会立即随之更新（数据库里存的是 token 数，不是金额）。
+No restart needed: the service checks the file on every request and reloads it. Estimated costs for past
+usage update at once (the database stores tokens, not money).
 
-模型名的归一化规则：取日志里模型字符串最后一个 `/` 之后的部分，转小写并去空格。
-不确定某个模型在库里叫什么，可以在网页「模型」标签页把鼠标停在该名字上，
-会显示日志中的原始模型名。
+Model names are normalized by taking the part after the last `/`, lower-cased, spaces removed. To see what a
+model is called in the database, hover over it on the 模型 (model) tab: the raw logged names are shown.
 
-## Mac 刘海伴侣（macos/）
+## The notch app, NotchBead (macos/)
 
-`macos/` 里是一个原生 Mac 小程序 **Heed**（Swift，macOS 26+），住在刘海里：
+`macos/` holds **NotchBead**, a native Mac app (Swift, macOS 26+) that lives in the notch:
 
-- **需要你处理的事**：Orca 里有 agent 等你审批、报错，或者在你没在看的项目里完成；
-  WorkBuddy 会话中断、等你回答或完成；ChatGPT 桌面版（即 Codex 应用）的任务在你没看着时完成。
-  有事时刘海左侧伸出蓝色 Bead，右上角挂着待处理数量；点一下刘海按顺序直接跳到下一件
-  （Orca 会切到那个 pane），处理完自动消失。新提醒到来时 Bead 跳一下，并响一声很短的
-  提示音（三个柔和的上行音）；右键刘海取消勾选 Play Sound 可以关掉。
-- **今日 token 用量**：刘海右侧常驻显示，颜色偏暗，单位固定为「亿」，比如 `2.01亿`。
-  数字来自本机 tokenboard 服务（`/api/breakdown`），每分钟刷新；服务每 5 分钟采集一次，
-  所以会比实时略晚几分钟。服务没运行时不显示。
-- **看板窗口**：点 token 数、右键刘海选 Open Dashboard，或者在 Spotlight 里再次打开 Heed，
-  会用独立的原生窗口打开同一个网页（出现在 Dock 和 Cmd-Tab 里，关掉就回到只有刘海）。
+- **Things that need you**: an agent in Orca waiting for approval, hitting an error, or finishing in a project
+  you aren't looking at; a WorkBuddy session interrupted, asking you something or finished; a ChatGPT desktop
+  app task finished while you weren't watching. Bead comes out on the left of the notch with the count on its
+  corner; clicking the notch goes straight to the next item, most urgent first (for Orca, the exact pane), and
+  items clear by themselves once handled. Each new item makes Bead hop and plays a short chime (three soft
+  rising notes); untick Play Sound in the notch's right-click menu to silence it.
+- **Today's tokens**: always shown, dimmed, on the right of the notch, in 亿 (100 million), such as `2.01亿`.
+  It comes from the tokenboard service (`/api/breakdown`) every minute; the service collects every 5 minutes,
+  so it can trail live use by a few minutes. Hidden when the service isn't running.
+- **Dashboard window**: click the token figure, choose Open Dashboard from the right-click menu, or open
+  NotchBead again from Spotlight, and the same page opens in a native window (in the Dock and Cmd-Tab while
+  open).
 
 ```bash
 cd macos
-make install   # 编译、签名并装到 /Applications，然后右键刘海勾选 Open at Login
+make install   # build, sign and copy to /Applications; then tick Open at Login in the right-click menu
 make test
 ```
 
-没有刘海的屏幕上它会退到菜单栏。详见 `macos/README.md`。
-刘海窗口的做法改编自 [onit](https://github.com/neethanwu/onit)（MIT），许可见 `macos/LICENSE`。
+On a screen without a notch it moves to the menu bar. More in `macos/README.md`. The notch window technique
+and Bead come from [onit](https://github.com/neethanwu/onit) (MIT); see `macos/LICENSE`.
 
-## 跑测试
+## Tests
 
-在仓库根目录执行：
+From the repository root:
 
 ```bash
 python3 -m unittest discover -s tests -t .
 ```
 
-Mac 程序的测试：`cd macos && make test`。
+The Mac app: `cd macos && make test`.
 
-测试全部使用临时目录和临时数据库（`TOKENBOARD_DB` 指向临时文件），
-不会读写你自己的真实日志与数据库。
+Tests use temporary folders and a temporary database (`TOKENBOARD_DB` points to a temp file); they never read
+or write your real logs or database.

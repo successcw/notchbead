@@ -87,11 +87,11 @@ enum MenuBarIcon {
 
     private static func accessibilityLabel(for mood: BeadMood) -> String {
         switch mood {
-        case .nothing: "Heed"
-        case .dozing: "Heed: nothing needs you"
-        case .onIt: "Heed: agents are working"
-        case .headsUp: "Heed: something is waiting for you"
-        case .failed: "Heed: an agent hit an error"
+        case .nothing: "NotchBead"
+        case .dozing: "NotchBead: nothing needs you"
+        case .onIt: "NotchBead: agents are working"
+        case .headsUp: "NotchBead: something is waiting for you"
+        case .failed: "NotchBead: an agent hit an error"
         }
     }
 }

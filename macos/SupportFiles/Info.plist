@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Heed</string>
+    <string>NotchBead</string>
     <key>CFBundleDisplayName</key>
-    <string>Heed</string>
+    <string>NotchBead</string>
     <key>CFBundleIdentifier</key>
-    <string>io.github.successcw.heed</string>
+    <string>io.github.successcw.notchbead</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
     <string>0.1.0</string>
     <key>CFBundleExecutable</key>
-    <string>Heed</string>
+    <string>NotchBead</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>

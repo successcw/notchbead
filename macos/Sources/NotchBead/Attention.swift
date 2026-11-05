@@ -179,7 +179,7 @@ enum OrcaAttention {
 // MARK: - WorkBuddy
 
 /// Reads WorkBuddy's local database, read-only. WorkBuddy doesn't record which sessions you've
-/// looked at, so Heed watches status changes instead: a session that stops working while
+/// looked at, so NotchBead watches status changes instead: a session that stops working while
 /// WorkBuddy isn't in front is one you didn't see finish.
 enum WorkBuddyAttention {
     static let bundleID = "com.tencent.workbuddy.mac"
@@ -217,7 +217,7 @@ enum WorkBuddyAttention {
         return (try? JSONDecoder().decode([Session].self, from: data)) ?? []
     }
 
-    /// What Heed remembers between polls.
+    /// What NotchBead remembers between polls.
     struct Memory: Equatable, Sendable {
         /// Each session's status at the last poll; nil before the first poll.
         var statuses: [String: String]?
@@ -237,12 +237,12 @@ enum WorkBuddyAttention {
         ["working", "running", "in_progress"].contains(status?.lowercased() ?? "")
     }
 
-    /// How far back the first poll looks for interruptions, so ones from just before Heed started show.
+    /// How far back the first poll looks for interruptions, so ones from just before NotchBead started show.
     static let recentWindow: TimeInterval = 30 * 60
 
     /// One poll's worth of change.
     /// - An interruption (error) or a stop to ask you something always shows, even with WorkBuddy
-    ///   in front, since Heed can't tell which session you're looking at. It goes when the session
+    ///   in front, since NotchBead can't tell which session you're looking at. It goes when the session
     ///   runs again or disappears, or when you click or dismiss it.
     /// - A normal finish shows only if WorkBuddy wasn't in front, and goes when you switch to it.
     static func step(_ memory: Memory, sessions: [Session], workBuddyInFront: Bool, now: Date = .now) -> Memory {
@@ -314,7 +314,7 @@ enum WorkBuddyAttention {
 /// Tasks in the ChatGPT desktop app, which is OpenAI's Codex app (bundle id com.openai.codex).
 /// Reads Codex's own thread list (`~/.codex/state_5.sqlite`, read-only) and the end of each
 /// thread's log, where every turn ends with `task_complete` (or `turn_aborted` when you stop it).
-/// Like WorkBuddy, nothing records what you've seen, so Heed watches turns end while the app
+/// Like WorkBuddy, nothing records what you've seen, so NotchBead watches turns end while the app
 /// isn't in front. The Codex CLI and background review threads are left out: CLI runs live in
 /// Orca, which already reports them.
 enum ChatGPTAttention {

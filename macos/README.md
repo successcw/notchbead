@@ -1,4 +1,4 @@
-# Heed
+# NotchBead
 
 Shows what your agents are waiting on you for, in the notch (or the menu bar on a screen without one), and today's token use from tokenboard, the dashboard in the rest of this repository.
 
@@ -8,7 +8,7 @@ Shows what your agents are waiting on you for, in the notch (or the menu bar on 
 
 Each item goes away by itself once it's handled: you switch to that Orca project, the agent carries on, or the WorkBuddy session runs again (a normal finish also clears when you switch to WorkBuddy; a ChatGPT task clears when you switch to ChatGPT or start another turn). Clicking the notch goes straight to the next item (for Orca, the exact pane), most urgent first: waiting on you, then errors, then finished. Click again for the one after; once every item has had a turn it starts over.
 
-The right of the notch always shows today's token use in 亿 (10^8), dimmed, such as `2.01亿`. When something needs you, Bead, onit's mascot, also comes out on the left of the notch, blue, running and following your pointer, with a small count of how many on its top-right corner that moves with it. Bead hops and a short chime plays (three soft rising pips) when something new arrives; turn it off with Play Sound in the right-click menu. Click the token figure, choose Open Dashboard from the notch's right-click menu, or open Heed again from Spotlight to see tokenboard's page in a window of its own. Right-click the notch also has Play Sound, Open at Login and Quit.
+The right of the notch always shows today's token use in 亿 (10^8), dimmed, such as `2.01亿`. When something needs you, Bead, onit's mascot, also comes out on the left of the notch, blue, running and following your pointer, with a small count of how many on its top-right corner that moves with it. Bead hops and a short chime plays (three soft rising pips) when something new arrives; turn it off with Play Sound in the right-click menu. Click the token figure, choose Open Dashboard from the notch's right-click menu, or open NotchBead again from Spotlight to see tokenboard's page in a window of its own. Right-click the notch also has Play Sound, Open at Login and Quit.
 
 ## What it reads
 
@@ -18,20 +18,20 @@ The right of the notch always shows today's token use in 亿 (10^8), dimmed, suc
 | WorkBuddy | `~/.workbuddy/workbuddy.db`, opened read-only (`mode=ro`): session title and status, compared from one poll to the next |
 | ChatGPT | `~/.codex/state_5.sqlite`, opened read-only: desktop-app thread names and log paths. Then only the end of each changed thread's log, for the last `task_started` / `task_complete` / `turn_aborted` line; message text is skipped unread |
 
-| tokenboard | `GET http://127.0.0.1:8787/api/breakdown` for today, every minute and on each arrival; the dashboard window loads the same address. Point it elsewhere with `defaults write io.github.successcw.heed tokenboardURL http://127.0.0.1:<port>` |
+| tokenboard | `GET http://127.0.0.1:8787/api/breakdown` for today, every minute and on each arrival; the dashboard window loads the same address. Point it elsewhere with `defaults write io.github.successcw.notchbead tokenboardURL http://127.0.0.1:<port>` |
 
-Heed connects to nothing but tokenboard on this Mac, and writes nothing but its own settings.
+NotchBead connects to nothing but tokenboard on this Mac, and writes nothing but its own settings.
 
 ## Build
 
 ```bash
-make run       # build, bundle, sign ad hoc and open Heed.app
+make run       # build, bundle, sign ad hoc and open NotchBead.app
 make install   # copy to /Applications and open it (use this before turning on Open at Login)
 make test
 make icon      # redraw the white app icon
 make sound     # rewrite the arrival chime from SupportFiles/generate-sound.py
 ```
 
-To see the notch without waiting on an agent: `open --env HEED_DEMO=1 Heed.app` adds a sample item after a few seconds.
+To see the notch without waiting on an agent: `open --env NOTCHBEAD_DEMO=1 NotchBead.app` adds a sample item after a few seconds.
 
 Needs macOS 26 and Xcode 26 (Swift 6.2). The notch window technique is adapted from [onit](https://github.com/neethanwu/onit) (MIT).

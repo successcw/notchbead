@@ -27,7 +27,7 @@ struct NotchGeometry: Equatable {
     }
 }
 
-/// Heed lives in the notch when there is one, and in the menu bar otherwise (an external display,
+/// NotchBead lives in the notch when there is one, and in the menu bar otherwise (an external display,
 /// a Mac without a notch). It switches on its own as displays come and go.
 @MainActor
 @Observable
@@ -98,7 +98,7 @@ final class NotchWindowController {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
-        // A fullscreen app hides the notch area, so Heed steps aside too.
+        // A fullscreen app hides the notch area, so NotchBead steps aside too.
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         panel.isMovable = false
 
@@ -155,7 +155,7 @@ final class NotchPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// The notch should react to the first click, even though Heed is never the active app.
+/// The notch should react to the first click, even though NotchBead is never the active app.
 final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
