@@ -32,6 +32,12 @@ final class AttentionStore {
 
     private static let interval: Duration = .seconds(3)
     private static let dismissedKey = "dismissed"
+    private static let soundKey = "playsSound"
+
+    /// A short chime when something new needs you. On unless turned off in the right-click menu.
+    var playsSound: Bool = UserDefaults.standard.object(forKey: AttentionStore.soundKey) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(playsSound, forKey: Self.soundKey) }
+    }
 
     init() {
         dismissed = Set(UserDefaults.standard.stringArray(forKey: Self.dismissedKey) ?? [])
@@ -138,6 +144,7 @@ final class AttentionStore {
         self.seen = (known ?? []).union(ids)
         guard let known, let newest = visible.first(where: { !known.contains($0.id) }) else { return false }
         arrival = newest
+        if playsSound { ArrivalSound.play() }
         arrivalTask?.cancel()
         arrivalTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(5))
@@ -182,5 +189,18 @@ final class AttentionStore {
                 NSLog("Heed: could not change login item: \(error.localizedDescription)")
             }
         }
+    }
+}
+
+/// Three soft rising pips (SupportFiles/Arrival.wav, made by generate-sound.py).
+@MainActor
+enum ArrivalSound {
+    private static let sound: NSSound? = Bundle.main.url(forResource: "Arrival", withExtension: "wav")
+        .flatMap { NSSound(contentsOf: $0, byReference: true) }
+
+    static func play() {
+        guard let sound else { return }
+        sound.stop()
+        sound.play()
     }
 }

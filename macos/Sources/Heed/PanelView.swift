@@ -74,6 +74,9 @@ struct PanelView: View {
             Toggle("Open at Login", isOn: Binding(get: { store.opensAtLogin }, set: { store.opensAtLogin = $0 }))
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
+            Toggle("Sound", isOn: Binding(get: { store.playsSound }, set: { store.playsSound = $0; if $0 { ArrivalSound.play() } }))
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
             Spacer()
             Button("Dashboard") { DashboardWindow.shared.show() }
                 .buttonStyle(.plain)

@@ -2,7 +2,7 @@ APP_NAME   = Heed
 BUNDLE_DIR = $(APP_NAME).app
 ARCHS      = --arch arm64 --arch x86_64
 
-.PHONY: build test bundle run icon clean install
+.PHONY: build test bundle run icon sound clean install
 
 build:
 	swift build -c release $(ARCHS)
@@ -16,6 +16,7 @@ bundle: build
 	cp "$$(swift build -c release $(ARCHS) --show-bin-path)/$(APP_NAME)" $(BUNDLE_DIR)/Contents/MacOS/$(APP_NAME)
 	cp SupportFiles/Info.plist $(BUNDLE_DIR)/Contents/
 	cp SupportFiles/AppIcon.icns $(BUNDLE_DIR)/Contents/Resources/AppIcon.icns
+	cp SupportFiles/Arrival.wav $(BUNDLE_DIR)/Contents/Resources/Arrival.wav
 	codesign --force --sign - $(BUNDLE_DIR)
 	@echo "Bundled: $(BUNDLE_DIR)"
 
@@ -30,6 +31,9 @@ install: bundle
 
 icon:
 	swift SupportFiles/generate-icon.swift
+
+sound:
+	python3 SupportFiles/generate-sound.py SupportFiles/Arrival.wav
 
 clean:
 	rm -rf .build $(BUNDLE_DIR)

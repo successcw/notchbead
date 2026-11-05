@@ -2,7 +2,7 @@
 
 ![tokenboard 和 Heed 演示](docs/media/promo.gif)
 
-<sub>演示用的是虚构数据。[高清 MP4](docs/media/promo.mp4) · [看板截图](docs/media/dashboard.png)</sub>
+<sub>演示用的是虚构数据。[高清 MP4（带声音）](docs/media/promo.mp4) · [看板截图](docs/media/dashboard.png)</sub>
 
 本机的 AI 编程助手 token 用量看板。它把 **pi**、**claude-code**、**codex**、
 **workbuddy** 四个 coding agent 写在本地日志里的用量，汇总进一个 SQLite 数据库，
@@ -210,7 +210,8 @@ HTTP 接口（仅 127.0.0.1）：
 - **需要你处理的事**：Orca 里有 agent 等你审批、报错，或者在你没在看的项目里完成；
   WorkBuddy 会话中断、等你回答或完成；ChatGPT 桌面版（即 Codex 应用）的任务在你没看着时完成。
   有事时刘海左侧伸出蓝色 Bead，右上角挂着待处理数量；点一下刘海按顺序直接跳到下一件
-  （Orca 会切到那个 pane），处理完自动消失。
+  （Orca 会切到那个 pane），处理完自动消失。新提醒到来时 Bead 跳一下，并响一声很短的
+  提示音（三个柔和的上行音）；右键刘海取消勾选 Play Sound 可以关掉。
 - **今日 token 用量**：刘海右侧常驻显示，颜色偏暗，单位固定为「亿」，比如 `2.01亿`。
   数字来自本机 tokenboard 服务（`/api/breakdown`），每分钟刷新；服务每 5 分钟采集一次，
   所以会比实时略晚几分钟。服务没运行时不显示。

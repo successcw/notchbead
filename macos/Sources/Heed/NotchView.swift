@@ -81,6 +81,7 @@ struct NotchView: View {
             .contextMenu {
                 Button("Open Dashboard") { DashboardWindow.shared.show() }
                 Divider()
+                Toggle("Play Sound", isOn: Binding(get: { store.playsSound }, set: { store.playsSound = $0; if $0 { ArrivalSound.play() } }))
                 Toggle("Open at Login", isOn: Binding(get: { store.opensAtLogin }, set: { store.opensAtLogin = $0 }))
                 Divider()
                 Button("Quit Heed") { NSApp.terminate(nil) }
