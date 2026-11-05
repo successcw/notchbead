@@ -207,6 +207,15 @@ struct OrderingTests {
         #expect(sorted.map(\.kind) == [.waiting, .failed, .finished])
     }
 
+    @Test func eachAppOnceInOrder() {
+        func item(_ id: String, _ source: AttentionItem.Source) -> AttentionItem {
+            AttentionItem(id: id, source: source, kind: .finished, title: id, since: .now, target: .app(bundleID: source.bundleID))
+        }
+        let items = [item("a", .chatGPT), item("b", .orca), item("c", .chatGPT), item("d", .workBuddy)]
+        #expect(AttentionItem.Source.distinct(in: items) == [.chatGPT, .orca, .workBuddy])
+        #expect(AttentionItem.Source.distinct(in: []).isEmpty)
+    }
+
     @Test func timeText() {
         let now = Date()
         #expect(TimeText.ago(now, now: now) == "just now")

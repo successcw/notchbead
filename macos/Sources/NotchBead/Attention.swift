@@ -15,6 +15,21 @@ struct AttentionItem: Identifiable, Equatable, Sendable {
         case orca = "Orca"
         case workBuddy = "WorkBuddy"
         case chatGPT = "ChatGPT"
+
+        /// The app whose icon stands for this source beside Bead.
+        var bundleID: String {
+            switch self {
+            case .orca: OrcaAttention.bundleID
+            case .workBuddy: WorkBuddyAttention.bundleID
+            case .chatGPT: ChatGPTAttention.bundleID
+            }
+        }
+
+        /// Each source once, in the order its first item appears.
+        static func distinct(in items: [AttentionItem]) -> [Source] {
+            var seen = Set<Source>()
+            return items.map(\.source).filter { seen.insert($0).inserted }
+        }
     }
 
     /// Changes when the same pane or session needs you again, so a dismissal covers one occasion only.

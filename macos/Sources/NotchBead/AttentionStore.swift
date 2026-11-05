@@ -114,6 +114,12 @@ final class AttentionStore {
         if ProcessInfo.processInfo.environment["NOTCHBEAD_DEMO"] == "1", let demoStart, Date.now.timeIntervalSince(demoStart) > 4 {
             found.append(AttentionItem(id: "demo", source: .orca, kind: .waiting, title: "π - teacher wants to run a command",
                                        project: "teacher", agent: "pi", since: demoStart, target: .app(bundleID: OrcaAttention.bundleID)))
+            // A second app a few seconds later, so the icon beside Bead starts taking turns.
+            if Date.now.timeIntervalSince(demoStart) > 9 {
+                found.append(AttentionItem(id: "demo-chatgpt", source: .chatGPT, kind: .finished, title: "Make a study guide PDF",
+                                           project: nil, agent: nil, since: demoStart.addingTimeInterval(9),
+                                           target: .app(bundleID: ChatGPTAttention.bundleID)))
+            }
         }
         if found != items { items = found }
         lastChecked = .now
