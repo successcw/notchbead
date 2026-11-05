@@ -62,6 +62,73 @@ struct OrcaAttentionTests {
     @Test func badOutputMeansNothing() {
         #expect(OrcaAttention.parse(Data("not json".utf8), orcaIsFrontmost: false).isEmpty)
     }
+    // MARK: watching agents finish
+
+    typealias O = OrcaAttention
+    static func claude(_ state: String, pane: String, main: String? = nil, parent: String? = nil, at: Int = 1000) -> String {
+        let mainJSON = main.map { #","mainAgent":{"state":"\#($0)","stateStartedAt":1}"# } ?? ""
+        let parentJSON = parent.map { #","parentPaneKey":"\#($0)""# } ?? ""
+        return #"{"paneKey":"\#(pane)","state":"\#(state)","agentType":"claude","conversationName":"Fix the login form","stateStartedAt":\#(at)\#(mainJSON)\#(parentJSON)}"#
+    }
+    static func trees(_ agents: String..., active: Bool = true) -> [O.Worktree] {
+        O.decode(Self.response([Self.worktree(active: active, unread: false, agents: agents.joined(separator: ","))]))
+    }
+
+    @Test func firstPollOnlyLearns() {
+        let memory = O.step(O.Memory(), worktrees: Self.trees(Self.claude("done", pane: "a:1")), orcaIsFrontmost: false)
+        #expect(memory.items.isEmpty)
+        #expect(memory.states?["a:1|claude"] == "done")
+    }
+
+    @Test func aReplyWhileYouAreInAnotherAppShows() {
+        var m = O.step(O.Memory(), worktrees: Self.trees(Self.claude("working", pane: "a:1")), orcaIsFrontmost: false)
+        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "a:1", at: 2000)), orcaIsFrontmost: false)
+        #expect(m.items["a:1|claude"]?.kind == .finished)
+        #expect(m.items["a:1|claude"]?.target == .orcaPane(paneKey: "a:1"))
+        // You reply: it's handled.
+        m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "a:1")), orcaIsFrontmost: false)
+        #expect(m.items.isEmpty)
+    }
+
+    @Test func aReplyInAnotherOrcaPaneShowsEvenWithOrcaInFront() {
+        // Asked in one project (d:1), then sent something here (t:1): t:1 is where you are now.
+        let t0 = Date(timeIntervalSince1970: 100)
+        var m = O.step(O.Memory(), worktrees: Self.trees(Self.claude("done", pane: "d:1"), Self.claude("done", pane: "t:1")), orcaIsFrontmost: true, now: t0)
+        m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "d:1"), Self.claude("done", pane: "t:1")), orcaIsFrontmost: true, now: t0 + 1)
+        m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "d:1"), Self.claude("working", pane: "t:1")), orcaIsFrontmost: true, now: t0 + 2)
+        #expect(m.focusedPane == "t:1")
+        // That project answers while you're here, in the same Orca: it shows.
+        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "d:1"), Self.claude("working", pane: "t:1")), orcaIsFrontmost: true, now: t0 + 3)
+        #expect(m.items["d:1|claude"] != nil)
+        // The agent you're talking to answers: you're looking at it, so nothing.
+        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "d:1"), Self.claude("done", pane: "t:1")), orcaIsFrontmost: true, now: t0 + 4)
+        #expect(m.items["t:1|claude"] == nil)
+        // ...but with Orca behind another app, it would.
+        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "d:1"), Self.claude("working", pane: "t:1")), orcaIsFrontmost: false, now: t0 + 5)
+        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "d:1"), Self.claude("done", pane: "t:1")), orcaIsFrontmost: false, now: t0 + 6)
+        #expect(m.items["t:1|claude"] != nil)
+    }
+
+    @Test func workersAndStaleStatesDoNotCount() {
+        // A worker started by another agent, and a pane whose top-level state is stuck on "working"
+        // while its main conversation is done.
+        var m = O.step(O.Memory(), worktrees: Self.trees(Self.claude("working", pane: "w:1", parent: "c:1"), Self.claude("working", pane: "s:1", main: "done")), orcaIsFrontmost: false)
+        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "w:1", parent: "c:1"), Self.claude("working", pane: "s:1", main: "done")), orcaIsFrontmost: false)
+        #expect(m.items.isEmpty)
+        #expect(O.workingCount(Self.response([Self.worktree(active: true, unread: false, agents: Self.claude("working", pane: "s:1", main: "done"))])) == 0)
+        // The main conversation's own state is what's watched.
+        m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "s:1", main: "working")), orcaIsFrontmost: false)
+        m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "s:1", main: "done")), orcaIsFrontmost: false)
+        #expect(m.items["s:1|claude"] != nil)
+    }
+
+    @Test func closedPanesGo() {
+        var m = O.step(O.Memory(), worktrees: Self.trees(Self.claude("working", pane: "a:1")), orcaIsFrontmost: false)
+        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "a:1")), orcaIsFrontmost: false)
+        m = O.step(m, worktrees: [], orcaIsFrontmost: false)
+        #expect(m.items.isEmpty)
+        #expect(m.focusedPane == nil)
+    }
 }
 
 struct WorkBuddyAttentionTests {

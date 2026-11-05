@@ -10,6 +10,7 @@ final class AttentionStore {
     private(set) var items: [AttentionItem] = []
     /// Agents working right now, in Orca, WorkBuddy and ChatGPT.
     private(set) var working = 0
+    @ObservationIgnored private var orca = OrcaAttention.Memory()
     @ObservationIgnored private var workBuddy = WorkBuddyAttention.Memory()
     @ObservationIgnored private var chatGPT = ChatGPTAttention.Memory()
     @ObservationIgnored private var chatGPTCache: ChatGPTAttention.Cache = [:]
@@ -94,15 +95,20 @@ final class AttentionStore {
     func refresh() async {
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let cache = chatGPTCache
-        let (orca, sessions, threads) = await Task.detached(priority: .utility) {
-            (OrcaAttention.scan(orcaIsFrontmost: front == OrcaAttention.bundleID), WorkBuddyAttention.sessions(),
+        let orcaInFront = front == OrcaAttention.bundleID
+        let focusedPane = orca.focusedPane
+        let (orcaStatus, sessions, threads) = await Task.detached(priority: .utility) {
+            (OrcaAttention.scan(orcaIsFrontmost: orcaInFront, focusedPane: focusedPane), WorkBuddyAttention.sessions(),
              ChatGPTAttention.scan(cache: cache))
         }.value
+        orca = OrcaAttention.step(orca, worktrees: orcaStatus.worktrees, orcaIsFrontmost: orcaInFront)
+        var orcaItems = orcaStatus.items
+        for item in orca.items.values where !orcaItems.contains(where: { $0.id == item.id }) { orcaItems.append(item) }
         workBuddy = WorkBuddyAttention.step(workBuddy, sessions: sessions, workBuddyInFront: front == WorkBuddyAttention.bundleID)
         chatGPTCache = threads.cache
         chatGPT = ChatGPTAttention.step(chatGPT, snapshots: threads.snapshots, appInFront: front == ChatGPTAttention.bundleID)
-        var found = orca.items + Array(workBuddy.items.values) + Array(chatGPT.items.values)
-        let busy = orca.working + WorkBuddyAttention.workingCount(sessions) + ChatGPTAttention.workingCount(threads.snapshots)
+        var found = orcaItems + Array(workBuddy.items.values) + Array(chatGPT.items.values)
+        let busy = orcaStatus.working + WorkBuddyAttention.workingCount(sessions) + ChatGPTAttention.workingCount(threads.snapshots)
         if busy != working { working = busy }
         // NOTCHBEAD_DEMO=1 adds a sample item a few seconds in, to see the notch without waiting on an agent.
         if ProcessInfo.processInfo.environment["NOTCHBEAD_DEMO"] == "1", let demoStart, Date.now.timeIntervalSince(demoStart) > 4 {
@@ -175,6 +181,8 @@ final class AttentionStore {
         switch item.target {
         case .orcaPane(let paneKey):
             Task.detached(priority: .userInitiated) { OrcaAttention.open(paneKey: paneKey) }
+            // Going there counts as seeing it; Orca's unread mark clears by itself, a watched finish doesn't.
+            dismiss(item)
         case .app(let bundleID):
             activate(bundleID: bundleID)
             // WorkBuddy and ChatGPT can't tell NotchBead when you've looked, so going there counts as handling it.

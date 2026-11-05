@@ -2,7 +2,7 @@
 
 Shows what your agents are waiting on you for, in the notch (or the menu bar on a screen without one), and today's token use from tokenboard, the dashboard in the rest of this repository.
 
-- **Orca**: an agent stopped for your approval or a reply, hit an error, or finished in a project you aren't looking at.
+- **Orca**: an agent stopped for your approval or a reply, hit an error, or finished while you were somewhere else: another app, or another Orca pane or window (Orca has no way to say where you are, so the pane you last sent something in counts as the one you are looking at). Workers started by another agent are left to that agent.
 - **WorkBuddy**: a session was interrupted or failed, stopped to ask you something, or finished while WorkBuddy wasn't in front.
 - **ChatGPT** (the desktop app, which is OpenAI's Codex app): a task finished while ChatGPT wasn't in front. Stopping a task yourself doesn't count, and Codex CLI runs are left to Orca.
 

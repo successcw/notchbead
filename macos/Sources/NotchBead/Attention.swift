@@ -40,8 +40,9 @@ struct AttentionItem: Identifiable, Equatable, Sendable {
 // MARK: - Orca
 
 /// Reads Orca's own view of its agents with its bundled CLI (`orca worktree ps --json`).
-/// Orca marks a workspace unread when an agent finishes there while you're looking elsewhere,
-/// and clears it when you open it: that's exactly "finished and you haven't seen it".
+/// Two signals for "finished and you haven't seen it": Orca's own unread mark on a workspace, and
+/// NotchBead watching each agent go from working to done. The second is needed because Orca counts
+/// a workspace open in any of its windows as seen, so a reply in another Orca window never goes unread.
 enum OrcaAttention {
     static let bundleID = "com.stablyai.orca"
     static let cli = "/Applications/Orca.app/Contents/Resources/bin/orca"
@@ -52,23 +53,24 @@ enum OrcaAttention {
         var items: [AttentionItem] = []
         /// Agents busy right now, anywhere in Orca: Bead runs while there are any.
         var working = 0
+        var worktrees: [Worktree] = []
     }
 
-    static func scan(orcaIsFrontmost: Bool) -> Status {
+    static func scan(orcaIsFrontmost: Bool, focusedPane: String?) -> Status {
         guard isInstalled, isRunning else { return Status() }
         let result = Shell.run(cli, ["worktree", "ps", "--json"])
         guard result.status == 0 else { return Status() }
         let data = Data(result.output.utf8)
-        return Status(items: parse(data, orcaIsFrontmost: orcaIsFrontmost), working: workingCount(data))
+        return Status(items: parse(data, orcaIsFrontmost: orcaIsFrontmost, focusedPane: focusedPane),
+                      working: workingCount(data), worktrees: decode(data))
+    }
+
+    static func decode(_ data: Data) -> [Worktree] {
+        ((try? JSONDecoder().decode(Response.self, from: data))?.result.worktrees ?? []).filter { $0.isArchived != true }
     }
 
     static func workingCount(_ data: Data) -> Int {
-        guard let response = try? JSONDecoder().decode(Response.self, from: data) else { return 0 }
-        return response.result.worktrees
-            .filter { $0.isArchived != true }
-            .flatMap { $0.agents ?? [] }
-            .filter { $0.state?.lowercased() == "working" }
-            .count
+        decode(data).flatMap { $0.agents ?? [] }.filter { $0.isYours && $0.current == "working" }.count
     }
 
     static var isRunning: Bool {
@@ -80,7 +82,7 @@ enum OrcaAttention {
         var result: Result
     }
 
-    struct Worktree: Decodable {
+    struct Worktree: Decodable, Sendable {
         var worktreeId: String
         var repo: String?
         var path: String?
@@ -92,30 +94,44 @@ enum OrcaAttention {
     }
 
     /// Only names and states are decoded; prompts, tool input and replies are left alone.
-    struct Agent: Decodable {
+    struct Agent: Decodable, Sendable {
         var paneKey: String
         var state: String?
+        /// For Claude: the main conversation's own state. The top-level state can stay "working"
+        /// for hours because of background subagents, so this one is trusted first.
+        var mainAgent: MainState?
+        /// Set on workers started by another agent (orchestration); they report to that agent, not to you.
+        var parentPaneKey: String?
         var agentType: String?
         var conversationName: String?
         var displayName: String?
         var taskTitle: String?
         var stateStartedAt: Double?
         var interrupted: Bool?
+
+        struct MainState: Decodable, Sendable { var state: String? }
+
+        var current: String { (mainAgent?.state ?? state ?? "").lowercased() }
+        var isYours: Bool { parentPaneKey?.isEmpty ?? true }
+        var key: String { "\(paneKey)|\(agentType ?? "")" }
     }
 
-    static func parse(_ data: Data, orcaIsFrontmost: Bool) -> [AttentionItem] {
-        guard let response = try? JSONDecoder().decode(Response.self, from: data) else { return [] }
+    /// Waiting and error states, plus Orca's own unread mark. `focusedPane` is the pane you last
+    /// sent something in (see `Memory`); when known, it decides what you're looking at while Orca is
+    /// in front, since Orca can't say which window or pane has your attention.
+    static func parse(_ data: Data, orcaIsFrontmost: Bool, focusedPane: String? = nil) -> [AttentionItem] {
+        guard (try? JSONDecoder().decode(Response.self, from: data)) != nil else { return [] }
         var items: [AttentionItem] = []
-        for worktree in response.result.worktrees where worktree.isArchived != true {
-            // You're looking at it: Orca is in front and this workspace is the one on screen.
-            let looking = orcaIsFrontmost && worktree.isActive == true
-            guard !looking else { continue }
+        for worktree in decode(data) {
+            let workspaceOnScreen = orcaIsFrontmost && worktree.isActive == true
             let project = projectName(worktree)
-            let agents = worktree.agents ?? []
+            let agents = (worktree.agents ?? []).filter(\.isYours)
             var flagged = false
             for agent in agents {
+                let looking = orcaIsFrontmost && (focusedPane.map { $0 == agent.paneKey } ?? workspaceOnScreen)
+                guard !looking else { continue }
                 let kind: AttentionItem.Kind
-                switch agent.state?.lowercased() {
+                switch agent.current {
                 case "waiting", "blocked", "needs-input", "needs_input", "permission": kind = .waiting
                 case "error", "failed": kind = .failed
                 default: continue
@@ -124,12 +140,52 @@ enum OrcaAttention {
                 items.append(item(for: agent, kind: kind, project: project))
             }
             // Unread is per workspace; name it after the agent that finished last.
-            if worktree.unread == true, !flagged,
-               let latest = agents.filter({ $0.state?.lowercased() == "done" }).max(by: { ($0.stateStartedAt ?? 0) < ($1.stateStartedAt ?? 0) }) {
+            if worktree.unread == true, !flagged, !workspaceOnScreen,
+               let latest = agents.filter({ $0.current == "done" }).max(by: { ($0.stateStartedAt ?? 0) < ($1.stateStartedAt ?? 0) }) {
                 items.append(item(for: latest, kind: .finished, project: project))
             }
         }
         return items
+    }
+
+    /// What NotchBead remembers between polls.
+    struct Memory: Equatable, Sendable {
+        /// Each agent's state at the last poll; nil before the first poll.
+        var states: [String: String]?
+        /// When each pane last started working: the newest is where you last sent something.
+        var started: [String: Date] = [:]
+        /// Finished items found by watching states, by agent.
+        var items: [String: AttentionItem] = [:]
+
+        var focusedPane: String? { started.max { $0.value < $1.value }?.key }
+    }
+
+    /// An agent of yours going from working to done is a finished item, unless Orca is in front and it's
+    /// the pane you last sent something in. It goes when the agent works again, when you click it,
+    /// or when the pane closes.
+    static func step(_ memory: Memory, worktrees: [Worktree], orcaIsFrontmost: Bool, now: Date = .now) -> Memory {
+        var next = memory
+        var states: [String: String] = [:]
+        for worktree in worktrees {
+            for agent in (worktree.agents ?? []) where agent.isYours {
+                let state = agent.current
+                states[agent.key] = state
+                guard let known = memory.states else { continue }
+                let before = known[agent.key]
+                if state == "working" {
+                    if before != "working" { next.started[agent.paneKey] = now }
+                    next.items[agent.key] = nil
+                } else if state == "done", before == "working" {
+                    let looking = orcaIsFrontmost && next.focusedPane == agent.paneKey
+                    if !looking { next.items[agent.key] = item(for: agent, kind: .finished, project: projectName(worktree)) }
+                }
+            }
+        }
+        next.items = next.items.filter { states[$0.key] != nil }
+        let panes = Set(states.keys.map { String($0.split(separator: "|", maxSplits: 1).first ?? "") })
+        next.started = next.started.filter { panes.contains($0.key) }
+        next.states = states
+        return next
     }
 
     private static func item(for agent: Agent, kind: AttentionItem.Kind, project: String?) -> AttentionItem {

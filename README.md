@@ -226,8 +226,8 @@ model is called in the database, hover over it on the 模型 (model) tab: the ra
 
 `macos/` holds **NotchBead**, a native Mac app (Swift, macOS 26+) that lives in the notch:
 
-- **Things that need you**: an agent in Orca waiting for approval, hitting an error, or finishing in a project
-  you aren't looking at; a WorkBuddy session interrupted, asking you something or finished; a ChatGPT desktop
+- **Things that need you**: an agent in Orca waiting for approval, hitting an error, or finishing while you were in
+  another app or another Orca pane or window; a WorkBuddy session interrupted, asking you something or finished; a ChatGPT desktop
   app task finished while you weren't watching. Bead comes out on the left of the notch with the count on its
   corner; clicking the notch goes straight to the next item, most urgent first (for Orca, the exact pane), and
   items clear by themselves once handled. Each new item makes Bead hop and plays a short chime (three soft
