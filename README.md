@@ -1,8 +1,14 @@
 # tokenboard
 
+![tokenboard 和 Heed 演示](docs/media/promo.gif)
+
+<sub>演示用的是虚构数据。[高清 MP4](docs/media/promo.mp4) · [看板截图](docs/media/dashboard.png)</sub>
+
 本机的 AI 编程助手 token 用量看板。它把 **pi**、**claude-code**、**codex**、
 **workbuddy** 四个 coding agent 写在本地日志里的用量，汇总进一个 SQLite 数据库，
 并用一个只监听 `127.0.0.1` 的本地网页把每天的趋势画出来。
+配套的 Mac 刘海小程序 **Heed** 把今日用量常驻在刘海旁，agent 有事时提醒你（见
+[Mac 刘海伴侣](#mac-刘海伴侣macos)）。
 
 只依赖 Python 3.13 标准库，全部数据留在本机，不上传、不联网。
 
@@ -197,6 +203,29 @@ HTTP 接口（仅 127.0.0.1）：
 不确定某个模型在库里叫什么，可以在网页「模型」标签页把鼠标停在该名字上，
 会显示日志中的原始模型名。
 
+## Mac 刘海伴侣（macos/）
+
+`macos/` 里是一个原生 Mac 小程序 **Heed**（Swift，macOS 26+），住在刘海里：
+
+- **需要你处理的事**：Orca 里有 agent 等你审批、报错，或者在你没在看的项目里完成；
+  WorkBuddy 会话中断、等你回答或完成；ChatGPT 桌面版（即 Codex 应用）的任务在你没看着时完成。
+  有事时刘海左侧伸出蓝色 Bead，右上角挂着待处理数量；点一下刘海按顺序直接跳到下一件
+  （Orca 会切到那个 pane），处理完自动消失。
+- **今日 token 用量**：刘海右侧常驻显示，颜色偏暗，单位固定为「亿」，比如 `2.01亿`。
+  数字来自本机 tokenboard 服务（`/api/breakdown`），每分钟刷新；服务每 5 分钟采集一次，
+  所以会比实时略晚几分钟。服务没运行时不显示。
+- **看板窗口**：点 token 数、右键刘海选 Open Dashboard，或者在 Spotlight 里再次打开 Heed，
+  会用独立的原生窗口打开同一个网页（出现在 Dock 和 Cmd-Tab 里，关掉就回到只有刘海）。
+
+```bash
+cd macos
+make install   # 编译、签名并装到 /Applications，然后右键刘海勾选 Open at Login
+make test
+```
+
+没有刘海的屏幕上它会退到菜单栏。详见 `macos/README.md`。
+刘海窗口的做法改编自 [onit](https://github.com/neethanwu/onit)（MIT），许可见 `macos/LICENSE`。
+
 ## 跑测试
 
 在仓库根目录执行：
@@ -204,6 +233,8 @@ HTTP 接口（仅 127.0.0.1）：
 ```bash
 python3 -m unittest discover -s tests -t .
 ```
+
+Mac 程序的测试：`cd macos && make test`。
 
 测试全部使用临时目录和临时数据库（`TOKENBOARD_DB` 指向临时文件），
 不会读写你自己的真实日志与数据库。
