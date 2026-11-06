@@ -233,6 +233,11 @@ model is called in the database, hover over it on the 模型 (model) tab: the ra
   each fading upward) and Bead, with the count on its corner, appear in the left one; clicking the notch goes straight to the next item, most urgent first (for Orca, the exact pane), and
   items clear by themselves once handled. Each new item makes Bead hop and plays a short chime (three soft
   rising notes); untick Play Sound in the notch's right-click menu to silence it.
+- **Your scheduled tasks** (from onit): when nothing needs you, Bead dozes grey in the left wing; click it to
+  open a panel of the tasks you set up yourself, or had Codex or WorkBuddy set up: your own launchd agents (program,
+  script or working folder in your home folder), your crontab, and Codex and WorkBuddy automations. Each shows its
+  schedule in words, next run, last result and why it failed, with Run Now, Pause and Resume. Bead turns red when
+  one fails.
 - **Today's tokens**: always shown, dimmed, on the right of the notch, in 亿 (100 million), such as `2.01亿`.
   It comes from the tokenboard service (`/api/breakdown`) every 15 seconds, and at once after you click 采集
   (collect now) in the dashboard window; the service itself collects every 5 minutes,

@@ -9,8 +9,10 @@ struct NotchBeadApp: App {
 
     init() {
         let store = AttentionStore()
-        let display = DisplayController(store: store)
+        let jobs = JobStore()
+        let display = DisplayController(store: store, jobs: jobs)
         store.start()
+        jobs.start()
         // The notch window needs NSApp, which isn't ready until the app finishes launching.
         DispatchQueue.main.async { display.start() }
         _store = State(initialValue: store)

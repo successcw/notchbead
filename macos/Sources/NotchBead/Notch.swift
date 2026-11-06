@@ -36,11 +36,13 @@ final class DisplayController {
     var showsMenuBarIcon: Bool { !notchAvailable }
 
     @ObservationIgnored private let store: AttentionStore
+    @ObservationIgnored private let jobs: JobStore
     @ObservationIgnored private var notch: NotchWindowController?
     @ObservationIgnored private var screenObserver: NSObjectProtocol?
 
-    init(store: AttentionStore) {
+    init(store: AttentionStore, jobs: JobStore) {
         self.store = store
+        self.jobs = jobs
     }
 
     func start() {
@@ -56,7 +58,7 @@ final class DisplayController {
         let geometry = NotchGeometry.current()
         notchAvailable = geometry != nil
         if let geometry {
-            if notch == nil { notch = NotchWindowController(store: store) }
+            if notch == nil { notch = NotchWindowController(store: store, jobs: jobs) }
             notch?.show(on: geometry)
         } else {
             notch?.hide()
@@ -67,6 +69,17 @@ final class DisplayController {
 @MainActor
 @Observable
 final class NotchModel {
+    /// The scheduled-tasks panel is open below the notch.
+    var isExpanded = false {
+        didSet { if oldValue != isExpanded { onExpandChange?(isExpanded) } }
+    }
+    @ObservationIgnored var onExpandChange: ((Bool) -> Void)?
+    /// Set by the panel so Escape steps back from a task's detail before closing the panel.
+    var showingDetail = false
+    /// A "more" menu is open, so Bead in the panel header steps back with the rest of the panel.
+    var menuOpen = false
+    /// Clicks on Bead in the panel header; each one makes it hop.
+    var beadPokes = 0
     var notchWidth: CGFloat = 180
     var notchHeight: CGFloat = 32
     var windowFrame: CGRect = .zero
@@ -75,19 +88,24 @@ final class NotchModel {
 
     static let wingWidth: CGFloat = 44
     static let wingBeadSize: CGFloat = 18
+    static let headerBeadSize: CGFloat = 34
+    static let panelWidth: CGFloat = 380
+    static let space = "notch"
 }
 
-/// A borderless panel pinned over the notch. Everything outside the black shape is transparent,
-/// so clicks there reach the apps below.
+/// A borderless panel pinned over the notch. It is always the size of the open panel; everything
+/// outside the black shape is transparent, so clicks there reach the apps below.
 @MainActor
 final class NotchWindowController {
     private let panel: NotchPanel
     private let model = NotchModel()
     private var mouseMonitors: [Any] = []
+    private var outsideClickMonitor: Any?
+    private var escapeMonitor: Any?
 
-    private static let windowSize = CGSize(width: 400, height: 80)
+    private static let windowSize = CGSize(width: NotchModel.panelWidth + 40, height: 640)
 
-    init(store: AttentionStore) {
+    init(store: AttentionStore, jobs: JobStore) {
         panel = NotchPanel(
             contentRect: CGRect(origin: .zero, size: Self.windowSize),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -102,9 +120,10 @@ final class NotchWindowController {
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         panel.isMovable = false
 
-        let hosting = FirstClickHostingView(rootView: NotchView(store: store, model: model))
+        let hosting = FirstClickHostingView(rootView: NotchView(store: store, jobs: jobs, model: model))
         hosting.sizingOptions = []
         panel.contentView = hosting
+        model.onExpandChange = { [weak self] expanded in self?.expandChanged(expanded) }
     }
 
     func show(on geometry: NotchGeometry) {
@@ -119,9 +138,17 @@ final class NotchWindowController {
         model.windowFrame = frame
         panel.orderFrontRegardless()
         trackPointer()
+        // NOTCHBEAD_OPEN=1 opens the scheduled-tasks panel at launch, for screenshots.
+        if ProcessInfo.processInfo.environment["NOTCHBEAD_OPEN"] == "1", !model.isExpanded {
+            Task { @MainActor [model] in
+                try? await Task.sleep(for: .seconds(2))
+                withAnimation(.notchOpen) { model.isExpanded = true }
+            }
+        }
     }
 
     func hide() {
+        collapse()
         panel.orderOut(nil)
         mouseMonitors.forEach(NSEvent.removeMonitor)
         mouseMonitors = []
@@ -150,9 +177,54 @@ final class NotchWindowController {
     }
 }
 
+extension NotchWindowController {
+    func collapse() {
+        guard model.isExpanded else { return }
+        withAnimation(.notchClose) { model.isExpanded = false }
+    }
+
+    /// While the panel is open it takes keys (Escape) and closes on a click anywhere else.
+    /// Closed, it never becomes key, so it can't take the text cursor from the app you're in.
+    fileprivate func expandChanged(_ expanded: Bool) {
+        panel.acceptsKey = expanded
+        if expanded {
+            panel.makeKey()
+            outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                MainActor.assumeIsolated { self?.collapse() }
+            }
+            // Escape closes the panel unless a task's detail is open, where it first goes back to the list.
+            escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard event.keyCode == 53 else { return event }
+                let handled = MainActor.assumeIsolated { () -> Bool in
+                    guard let self, !self.model.showingDetail else { return false }
+                    self.collapse()
+                    return true
+                }
+                return handled ? nil : event
+            }
+        } else {
+            for monitor in [outsideClickMonitor, escapeMonitor].compactMap({ $0 }) {
+                NSEvent.removeMonitor(monitor)
+            }
+            outsideClickMonitor = nil
+            escapeMonitor = nil
+            panel.resignKey()
+        }
+    }
+}
+
 final class NotchPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
+    /// Only while the scheduled-tasks panel is open.
+    var acceptsKey = false
+    override var canBecomeKey: Bool { acceptsKey }
     override var canBecomeMain: Bool { false }
+}
+
+extension EnvironmentValues {
+    @Entry var panelWidth: CGFloat = Metrics.popoverWidth
+    /// True inside the notch, where controls are flat fills on black instead of Liquid Glass.
+    @Entry var notchStyle = false
+    @Entry var notchModel: NotchModel?
 }
 
 /// The notch should react to the first click, even though NotchBead is never the active app.

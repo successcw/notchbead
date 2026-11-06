@@ -241,7 +241,7 @@ struct OrderingTests {
     @Test func timeText() {
         let now = Date()
         #expect(TimeText.ago(now, now: now) == "just now")
-        #expect(TimeText.ago(now.addingTimeInterval(-300), now: now) == "5 min ago")
+        #expect(TimeText.ago(now.addingTimeInterval(-300), now: now) == "5m ago")
     }
 }
 
