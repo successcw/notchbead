@@ -185,7 +185,8 @@ final class AttentionStore {
     private func noticeArrivals() -> Bool {
         let ids = Set(visible.map(\.id))
         let known = self.seen
-        self.seen = (known ?? []).union(ids)
+        // Forget items that have gone, so one that comes back (same id) chimes again.
+        self.seen = (known ?? []).intersection(Set(items.map(\.id))).union(ids)
         guard let known, let newest = visible.first(where: { !known.contains($0.id) }) else { return false }
         arrival = newest
         if playsSound { ArrivalSound.play() }

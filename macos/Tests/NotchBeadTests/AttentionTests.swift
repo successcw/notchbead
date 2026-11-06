@@ -65,8 +65,8 @@ struct OrcaAttentionTests {
     // MARK: watching agents finish
 
     typealias O = OrcaAttention
-    static func claude(_ state: String, pane: String, main: String? = nil, parent: String? = nil, at: Int = 1000) -> String {
-        let mainJSON = main.map { #","mainAgent":{"state":"\#($0)","stateStartedAt":1}"# } ?? ""
+    static func claude(_ state: String, pane: String, main: String? = nil, mainAt: Int = 1, parent: String? = nil, at: Int = 1000) -> String {
+        let mainJSON = main.map { #","mainAgent":{"state":"\#($0)","stateStartedAt":\#(mainAt)}"# } ?? ""
         let parentJSON = parent.map { #","parentPaneKey":"\#($0)""# } ?? ""
         return #"{"paneKey":"\#(pane)","state":"\#(state)","agentType":"claude","conversationName":"Fix the login form","stateStartedAt":\#(at)\#(mainJSON)\#(parentJSON)}"#
     }
@@ -88,6 +88,18 @@ struct OrcaAttentionTests {
         // You reply: it's handled.
         m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "a:1")), orcaIsFrontmost: false)
         #expect(m.items.isEmpty)
+    }
+
+    /// Seen for real: Claude's top-level state stuck on working with the same start time, so every
+    /// finish had one id and only the first chimed.
+    @Test func eachFinishInAPaneGetsItsOwnId() {
+        var m = O.step(O.Memory(), worktrees: Self.trees(Self.claude("working", pane: "b:1", main: "working", mainAt: 10)), orcaIsFrontmost: false)
+        m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "b:1", main: "done", mainAt: 20)), orcaIsFrontmost: false)
+        let first = m.items["b:1|claude"]?.id
+        m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "b:1", main: "working", mainAt: 30)), orcaIsFrontmost: false)
+        m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "b:1", main: "done", mainAt: 40)), orcaIsFrontmost: false)
+        let second = m.items["b:1|claude"]?.id
+        #expect(first != nil && second != nil && first != second)
     }
 
     @Test func aReplyInAnotherOrcaPaneShowsEvenWithOrcaInFront() {

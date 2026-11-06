@@ -125,7 +125,7 @@ enum OrcaAttention {
         var stateStartedAt: Double?
         var interrupted: Bool?
 
-        struct MainState: Decodable, Sendable { var state: String? }
+        struct MainState: Decodable, Sendable { var state: String?; var stateStartedAt: Double? }
 
         var current: String { (mainAgent?.state ?? state ?? "").lowercased() }
         var isYours: Bool { parentPaneKey?.isEmpty ?? true }
@@ -205,7 +205,9 @@ enum OrcaAttention {
     }
 
     private static func item(for agent: Agent, kind: AttentionItem.Kind, project: String?) -> AttentionItem {
-        let started = agent.stateStartedAt ?? 0
+        // The main conversation's own start time: Claude's top-level one can stay put for hours, which
+        // gave every finish in that pane the same id, so later ones never chimed.
+        let started = agent.mainAgent?.stateStartedAt ?? agent.stateStartedAt ?? 0
         let title = [agent.taskTitle, agent.displayName, agent.conversationName]
             .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
             .first { !$0.isEmpty } ?? agent.agentType?.capitalized ?? "Agent"
