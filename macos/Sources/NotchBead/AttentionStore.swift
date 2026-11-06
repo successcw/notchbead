@@ -1,3 +1,4 @@
+import OSLog
 import AppKit
 import Observation
 import ServiceManagement
@@ -143,7 +144,10 @@ final class AttentionStore {
                                            target: .app(bundleID: ChatGPTAttention.bundleID)))
             }
         }
-        if found != items { items = found }
+        if found != items {
+            Self.log.notice("items \(found.map(\.id).joined(separator: " "), privacy: .public)")
+            items = found
+        }
         lastChecked = .now
 
         // Forget dismissals for things that have gone, so the list doesn't grow forever.
@@ -182,6 +186,8 @@ final class AttentionStore {
 
     /// The first poll only learns what's already there; later ones announce what's new.
     /// Returns whether something new arrived.
+    private static let log = Logger(subsystem: "io.github.successcw.notchbead", category: "attention")
+
     private func noticeArrivals() -> Bool {
         let ids = Set(visible.map(\.id))
         let known = self.seen
@@ -189,7 +195,8 @@ final class AttentionStore {
         self.seen = (known ?? []).intersection(Set(items.map(\.id))).union(ids)
         guard let known, let newest = visible.first(where: { !known.contains($0.id) }) else { return false }
         arrival = newest
-        if playsSound { ArrivalSound.play() }
+        let played = playsSound && ArrivalSound.play()
+        Self.log.notice("arrival \(newest.id, privacy: .public) sound=\(played, privacy: .public)")
         arrivalTask?.cancel()
         arrivalTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(5))
@@ -245,9 +252,11 @@ enum ArrivalSound {
     private static let sound: NSSound? = Bundle.main.url(forResource: "Arrival", withExtension: "wav")
         .flatMap { NSSound(contentsOf: $0, byReference: true) }
 
-    static func play() {
-        guard let sound else { return }
+    /// Whether it started playing.
+    @discardableResult
+    static func play() -> Bool {
+        guard let sound else { return false }
         sound.stop()
-        sound.play()
+        return sound.play()
     }
 }
