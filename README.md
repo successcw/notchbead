@@ -9,7 +9,7 @@
 A keeper for your AI coding agents that lives in the Mac notch, plus a local token-usage dashboard.
 
 - **Notch alerts**: when an agent in Orca waits for your approval, hits an error or finishes, a WorkBuddy
-  session is interrupted, or a task in the ChatGPT desktop app completes, Bead (a small blue character) pops out of the notch with a
+  session is interrupted, or a task or chat reply in the ChatGPT desktop app completes, Bead (a small blue character) pops out of the notch with a
   short chime. One click takes you straight to that window.
 - **Today's usage, always visible**: the right side of the notch always shows today's tokens (such as `2.01亿`;
   亿 = 100 million).
@@ -228,7 +228,7 @@ model is called in the database, hover over it on the 模型 (model) tab: the ra
 
 - **Things that need you**: an agent in Orca waiting for approval, hitting an error, or finishing while you were in
   another app or another Orca pane or window; a WorkBuddy session interrupted, asking you something or finished; a ChatGPT desktop
-  app task finished while you weren't watching. The notch never changes size: a small wing is always out on each side. The right
+  app task or chat reply finished while you weren't watching. The notch never changes size: a small wing is always out on each side. The right
   one shows today's tokens; when something needs you, the icon of the app that wants you (several apps take turns,
   each fading upward) and Bead, with the count on its corner, appear in the left one; clicking the notch goes straight to the next item, most urgent first (for Orca, the exact pane), and
   items clear by themselves once handled. Each new item makes Bead hop and plays a short chime (three soft

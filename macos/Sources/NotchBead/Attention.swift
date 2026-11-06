@@ -565,6 +565,61 @@ enum ChatGPTAttention {
     }
 }
 
+/// Ordinary ChatGPT chats, as opposed to Codex tasks. While a reply is being written, ChatGPT lists
+/// the chat in `active_chat_turns` (in ~/.codex/sqlite/codex.db); when the chat leaves that list,
+/// its reply is done. Only chat ids and titles are read, never the conversation.
+enum ChatGPTChats {
+    static var database: String {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sqlite/codex.db").path
+    }
+
+    struct Turn: Decodable, Equatable, Sendable {
+        var thread_id: String
+        var title: String?
+    }
+
+    /// Chats with a reply being written right now; nil when the database couldn't be read this time.
+    static func activeTurns() -> [Turn]? {
+        guard FileManager.default.fileExists(atPath: database) else { return [] }
+        let sql = """
+            SELECT a.thread_id,
+                   (SELECT display_title FROM local_thread_catalog c WHERE c.thread_id = a.thread_id LIMIT 1) AS title
+            FROM active_chat_turns a
+            """
+        let result = Shell.run("/usr/bin/sqlite3", ["-readonly", "-json", "file:\(database)?mode=ro", sql])
+        guard result.status == 0 else { return nil }
+        if result.output.isEmpty { return [] }
+        return try? JSONDecoder().decode([Turn].self, from: Data(result.output.utf8))
+    }
+
+    struct Memory: Equatable, Sendable {
+        /// Chats replying at the last poll, with their titles; nil before the first poll.
+        var active: [String: String]?
+        var items: [String: AttentionItem] = [:]
+    }
+
+    /// A reply that finishes while ChatGPT isn't in front shows as finished. It goes when you switch
+    /// to ChatGPT or send that chat something new.
+    static func step(_ memory: Memory, active turns: [Turn], appInFront: Bool, now: Date = .now) -> Memory {
+        var next = memory
+        var active: [String: String] = [:]
+        for turn in turns { active[turn.thread_id] = turn.title ?? memory.active?[turn.thread_id] ?? "" }
+        if let before = memory.active {
+            for (id, title) in before where active[id] == nil && !appInFront {
+                next.items[id] = AttentionItem(
+                    id: "chatgpt-chat:\(id):\(Int(now.timeIntervalSince1970))",
+                    source: .chatGPT, kind: .finished,
+                    title: title.isEmpty ? "ChatGPT reply" : title,
+                    since: now, target: .app(bundleID: ChatGPTAttention.bundleID))
+            }
+        }
+        for id in active.keys { next.items[id] = nil }
+        if appInFront { next.items = [:] }
+        next.active = active
+        return next
+    }
+}
+
 /// Brings an app to the front. NotchBead is never the active app, and since macOS 14 a plain
 /// `NSRunningApplication.activate()` from a background app is quietly ignored, so this goes through
 /// Launch Services instead, like the Dock or `open -a`, which works from the background.

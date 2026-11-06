@@ -18,6 +18,8 @@ final class AttentionStore {
     @ObservationIgnored private var lastOrca = OrcaAttention.Status()
     @ObservationIgnored private var lastSessions: [WorkBuddyAttention.Session] = []
     @ObservationIgnored private var lastThreads: [ChatGPTAttention.Snapshot] = []
+    @ObservationIgnored private var lastChats: [ChatGPTChats.Turn] = []
+    @ObservationIgnored private var chats = ChatGPTChats.Memory()
     private(set) var lastChecked: Date?
     /// The newest arrival, for the notch to show briefly.
     private(set) var arrival: AttentionItem?
@@ -101,9 +103,9 @@ final class AttentionStore {
         let cache = chatGPTCache
         let orcaInFront = front == OrcaAttention.bundleID
         let focusedPane = orca.focusedPane
-        let (orcaStatus, sessions, threads) = await Task.detached(priority: .utility) {
+        let (orcaStatus, sessions, threads, chatTurns) = await Task.detached(priority: .utility) {
             (OrcaAttention.scan(orcaIsFrontmost: orcaInFront, focusedPane: focusedPane), WorkBuddyAttention.sessions(),
-             ChatGPTAttention.scan(cache: cache))
+             ChatGPTAttention.scan(cache: cache), ChatGPTChats.activeTurns())
         }.value
         // A source that couldn't be read this time (nil) keeps what it had: reading nothing would look
         // like everything went away, and the next good read would then look like everything was new.
@@ -122,8 +124,13 @@ final class AttentionStore {
             lastThreads = threads.snapshots
             chatGPT = ChatGPTAttention.step(chatGPT, snapshots: threads.snapshots, appInFront: front == ChatGPTAttention.bundleID)
         }
-        var found = orcaItems + Array(workBuddy.items.values) + Array(chatGPT.items.values)
+        if let chatTurns {
+            lastChats = chatTurns
+            chats = ChatGPTChats.step(chats, active: chatTurns, appInFront: front == ChatGPTAttention.bundleID)
+        }
+        var found = orcaItems + Array(workBuddy.items.values) + Array(chatGPT.items.values) + Array(chats.items.values)
         let busy = lastOrca.working + WorkBuddyAttention.workingCount(lastSessions) + ChatGPTAttention.workingCount(lastThreads)
+            + lastChats.count
         if busy != working { working = busy }
         // NOTCHBEAD_DEMO=1 adds a sample item a few seconds in, to see the notch without waiting on an agent.
         if ProcessInfo.processInfo.environment["NOTCHBEAD_DEMO"] == "1", let demoStart, Date.now.timeIntervalSince(demoStart) > 4 {

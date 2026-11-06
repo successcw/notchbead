@@ -4,7 +4,7 @@ Shows what your agents are waiting on you for, in the notch (or the menu bar on 
 
 - **Orca**: an agent stopped for your approval or a reply, hit an error, or finished while you were somewhere else: another app, or another Orca pane or window (Orca has no way to say where you are, so the pane you last sent something in counts as the one you are looking at). Workers started by another agent are left to that agent.
 - **WorkBuddy**: a session was interrupted or failed, stopped to ask you something, or finished while WorkBuddy wasn't in front.
-- **ChatGPT** (the desktop app, which is OpenAI's Codex app): a task finished while ChatGPT wasn't in front. Stopping a task yourself doesn't count, and Codex CLI runs are left to Orca.
+- **ChatGPT** (the desktop app, which is OpenAI's Codex app): a task or an ordinary chat reply finished while ChatGPT wasn't in front. Stopping a task yourself doesn't count, and Codex CLI runs are left to Orca.
 
 Each item goes away by itself once it's handled: you switch to that Orca project, the agent carries on, or the WorkBuddy session runs again (a normal finish also clears when you switch to WorkBuddy; a ChatGPT task clears when you switch to ChatGPT or start another turn). Clicking the notch goes straight to the next item (for Orca, the exact pane), most urgent first: waiting on you, then errors, then finished. Click again for the one after; once every item has had a turn it starts over.
 
@@ -16,7 +16,7 @@ The notch never changes size: a small wing is always out on each side. The right
 | --- | --- |
 | Orca | `orca worktree ps --json` and `orca terminal list --json`, with the CLI inside Orca.app. Only names and states are decoded, never prompts, commands or replies |
 | WorkBuddy | `~/.workbuddy/workbuddy.db`, opened read-only (`mode=ro`): session title and status, compared from one poll to the next |
-| ChatGPT | `~/.codex/state_5.sqlite`, opened read-only: desktop-app thread names and log paths. Then only the end of each changed thread's log, for the last `task_started` / `task_complete` / `turn_aborted` line; message text is skipped unread |
+| ChatGPT | `~/.codex/state_5.sqlite`, opened read-only: desktop-app thread names and log paths. Then only the end of each changed thread's log, for the last `task_started` / `task_complete` / `turn_aborted` line; message text is skipped unread. For ordinary chats, `~/.codex/sqlite/codex.db` (read-only): the ids of chats with a reply in progress (`active_chat_turns`) and their titles |
 
 | tokenboard | `GET http://127.0.0.1:8787/api/breakdown` for today, every 15 seconds, on each arrival, and right after 采集 (collect now) in the dashboard window; the dashboard window loads the same address. Point it elsewhere with `defaults write io.github.successcw.notchbead tokenboardURL http://127.0.0.1:<port>` |
 

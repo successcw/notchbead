@@ -326,3 +326,35 @@ struct ChatGPTAttentionTests {
         #expect(C.workingCount([Self.snap("x", .running), Self.snap("y", .running, live: false), Self.snap("z", .done)]) == 1)
     }
 }
+
+@Suite struct ChatGPTChatTests {
+    typealias C = ChatGPTChats
+    static let turn = C.Turn(thread_id: "t", title: "Plan a weekend trip")
+
+    @Test func aReplyFinishingWhileYouAreElsewhereShows() {
+        var memory = C.step(C.Memory(), active: [], appInFront: true)
+        memory = C.step(memory, active: [Self.turn], appInFront: true)   // you send it in ChatGPT
+        memory = C.step(memory, active: [Self.turn], appInFront: false)  // then go elsewhere
+        #expect(memory.items.isEmpty)
+        memory = C.step(memory, active: [], appInFront: false)           // the reply is done
+        #expect(memory.items["t"]?.title == "Plan a weekend trip")
+        memory = C.step(memory, active: [], appInFront: true)            // you look
+        #expect(memory.items.isEmpty)
+    }
+
+    @Test func notWhenYouWatchItFinish() {
+        var memory = C.step(C.Memory(), active: [Self.turn], appInFront: true)
+        memory = C.step(memory, active: [], appInFront: true)
+        #expect(memory.items.isEmpty)
+    }
+
+    @Test func firstPollOnlyLearnsAndANewTurnClears() {
+        var memory = C.step(C.Memory(), active: [], appInFront: false)
+        #expect(memory.items.isEmpty)
+        memory = C.step(memory, active: [Self.turn], appInFront: false)
+        memory = C.step(memory, active: [], appInFront: false)
+        #expect(memory.items.count == 1)
+        memory = C.step(memory, active: [Self.turn], appInFront: false)
+        #expect(memory.items.isEmpty)
+    }
+}
