@@ -135,8 +135,8 @@ final class AttentionStore {
         if busy != working { working = busy }
         // NOTCHBEAD_DEMO=1 adds a sample item a few seconds in, to see the notch without waiting on an agent.
         if ProcessInfo.processInfo.environment["NOTCHBEAD_DEMO"] == "1", let demoStart, Date.now.timeIntervalSince(demoStart) > 4 {
-            found.append(AttentionItem(id: "demo", source: .orca, kind: .waiting, title: "π - teacher wants to run a command",
-                                       project: "teacher", agent: "pi", since: demoStart, target: .app(bundleID: OrcaAttention.bundleID)))
+            found.append(AttentionItem(id: "demo", source: .orca, kind: .waiting, title: "π - api-server wants to run a command",
+                                       project: "api-server", agent: "pi", since: demoStart, target: .app(bundleID: OrcaAttention.bundleID)))
             // A second app a few seconds later, so the icon beside Bead starts taking turns.
             if Date.now.timeIntervalSince(demoStart) > 9 {
                 found.append(AttentionItem(id: "demo-chatgpt", source: .chatGPT, kind: .finished, title: "Make a study guide PDF",

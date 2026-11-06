@@ -156,7 +156,7 @@ enum KindSymbol {
 }
 
 enum ItemText {
-    /// "Waiting for you · Orca · teacher · pi · 3 min ago"
+    /// "Waiting for you · Orca · api-server · pi · 3 min ago"
     static func detail(_ item: AttentionItem, now: Date) -> String {
         let what: String
         switch item.kind {

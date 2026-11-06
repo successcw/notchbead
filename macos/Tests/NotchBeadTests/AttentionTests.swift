@@ -5,10 +5,10 @@ import Testing
 struct OrcaAttentionTests {
     static func worktree(active: Bool, unread: Bool, agents: String) -> String {
         """
-        {"worktreeId":"w\(UUID())","repo":"/Users/me/Dev/teacher","isArchived":false,"isActive":\(active),"unread":\(unread),"agents":[\(agents)]}
+        {"worktreeId":"w\(UUID())","repo":"/Users/me/Dev/api-server","isArchived":false,"isActive":\(active),"unread":\(unread),"agents":[\(agents)]}
         """
     }
-    static func agent(_ state: String, pane: String = "tab:leaf", name: String = "π - teacher", at: Int = 1000) -> String {
+    static func agent(_ state: String, pane: String = "tab:leaf", name: String = "π - api-server", at: Int = 1000) -> String {
         #"{"paneKey":"\#(pane)","state":"\#(state)","agentType":"pi","conversationName":"\#(name)","stateStartedAt":\#(at),"toolInput":"secret stuff"}"#
     }
     static func response(_ worktrees: [String]) -> Data {
@@ -24,7 +24,7 @@ struct OrcaAttentionTests {
         #expect(items.count == 1)
         #expect(items[0].kind == .finished)
         #expect(items[0].title == "later")
-        #expect(items[0].project == "teacher")
+        #expect(items[0].project == "api-server")
         #expect(items[0].agent == "pi")
     }
 
