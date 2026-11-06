@@ -191,10 +191,20 @@ struct WorkBuddyAttentionTests {
     }
 
     @Test func aQuickNewSessionCounts() {
-        var memory = W.step(W.Memory(), sessions: [], workBuddyInFront: false)
-        memory = W.step(memory, sessions: [Self.session("new", "completed")], workBuddyInFront: false)
+        // updated_at is in ms; "now" is 1 min after the session changed.
+        let now = Date(timeIntervalSince1970: 61)
+        var memory = W.step(W.Memory(), sessions: [], workBuddyInFront: false, now: now)
+        memory = W.step(memory, sessions: [Self.session("new", "completed")], workBuddyInFront: false, now: now)
         #expect(memory.items["new"]?.kind == .finished)
         #expect(W.workingCount([Self.session("x", "working"), Self.session("y", "completed")]) == 1)
+    }
+
+    @Test func anOldSessionComingBackIntoTheListDoesNot() {
+        // Finished an hour before it showed up, e.g. after a read that failed.
+        let now = Date(timeIntervalSince1970: 3601)
+        var memory = W.step(W.Memory(), sessions: [], workBuddyInFront: false, now: now)
+        memory = W.step(memory, sessions: [Self.session("old", "completed")], workBuddyInFront: false, now: now)
+        #expect(memory.items.isEmpty)
     }
 }
 
@@ -292,9 +302,21 @@ struct ChatGPTAttentionTests {
         #expect(memory.items.isEmpty)
     }
 
+    /// The false alarm seen for real: one unreadable poll dropped every thread, and the next poll
+    /// saw yesterday's finished threads as new.
+    @Test func threadsFinishedLongAgoComingBackDoNotShow() {
+        let now = Date(timeIntervalSince1970: 86_400)
+        let old = [Self.snap("a", .done), Self.snap("b", .done), Self.snap("c", .done)]
+        var memory = C.step(C.Memory(), snapshots: old, appInFront: false, now: now)
+        memory = C.step(memory, snapshots: [], appInFront: false, now: now)
+        memory = C.step(memory, snapshots: old, appInFront: false, now: now)
+        #expect(memory.items.isEmpty)
+    }
+
     @Test func newAndArchivedThreads() {
-        var memory = C.step(C.Memory(), snapshots: [], appInFront: false)
-        memory = C.step(memory, snapshots: [Self.snap("new", .done)], appInFront: false)
+        let now = Date(timeIntervalSince1970: 61)
+        var memory = C.step(C.Memory(), snapshots: [], appInFront: false, now: now)
+        memory = C.step(memory, snapshots: [Self.snap("new", .done)], appInFront: false, now: now)
         #expect(memory.items["new"] != nil)
         memory = C.step(memory, snapshots: [], appInFront: false)
         #expect(memory.items.isEmpty)

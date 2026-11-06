@@ -71,10 +71,11 @@ enum OrcaAttention {
         var worktrees: [Worktree] = []
     }
 
-    static func scan(orcaIsFrontmost: Bool, focusedPane: String?) -> Status {
+    /// nil when Orca is running but couldn't be read this time; the caller keeps what it had.
+    static func scan(orcaIsFrontmost: Bool, focusedPane: String?) -> Status? {
         guard isInstalled, isRunning else { return Status() }
         let result = Shell.run(cli, ["worktree", "ps", "--json"])
-        guard result.status == 0 else { return Status() }
+        guard result.status == 0 else { return nil }
         let data = Data(result.output.utf8)
         return Status(items: parse(data, orcaIsFrontmost: orcaIsFrontmost, focusedPane: focusedPane),
                       working: workingCount(data), worktrees: decode(data))
@@ -276,16 +277,19 @@ enum WorkBuddyAttention {
     }
 
     /// Sessions active in the last day; only titles and states, never the conversation.
-    static func sessions() -> [Session] {
+    /// nil when the database is there but couldn't be read this time; the caller keeps what it had.
+    static func sessions() -> [Session]? {
+        guard FileManager.default.fileExists(atPath: database) else { return [] }
         guard let data = query("""
             SELECT id, COALESCE(NULLIF(custom_title, ''), title) AS title, status, updated_at, cwd
             FROM sessions
             WHERE (deleted_at IS NULL OR deleted_at = -1)
               AND updated_at > (strftime('%s', 'now') - 86400) * 1000
             ORDER BY updated_at DESC LIMIT 100
-            """), !data.isEmpty
-        else { return [] }
-        return (try? JSONDecoder().decode([Session].self, from: data)) ?? []
+            """)
+        else { return nil }
+        if data.isEmpty { return [] }
+        return try? JSONDecoder().decode([Session].self, from: data)
     }
 
     /// What NotchBead remembers between polls.
@@ -310,6 +314,8 @@ enum WorkBuddyAttention {
 
     /// How far back the first poll looks for interruptions, so ones from just before NotchBead started show.
     static let recentWindow: TimeInterval = 30 * 60
+    /// How recently a session or thread new to the list must have changed to count as just finished.
+    static let newWindow: TimeInterval = 3 * 60
 
     /// One poll's worth of change.
     /// - An interruption (error) or a stop to ask you something always shows, even with WorkBuddy
@@ -340,8 +346,10 @@ enum WorkBuddyAttention {
                 next.items[session.id] = nil
                 continue
             }
-            // A brand-new session that's already done ran between two polls, so it counts too.
-            guard before == nil || isBusy(before) else { continue }
+            // A brand-new session that's already done ran between two polls, so it counts too, but only
+            // if it really is new: one that merely came back into the list finished long ago.
+            let updated = Date(timeIntervalSince1970: (session.updated_at ?? 0) / 1000)
+            guard isBusy(before) || (before == nil && now.timeIntervalSince(updated) < newWindow) else { continue }
             switch kind(for: status) {
             case .failed?:
                 next.items[session.id] = item(session, kind: .failed)
@@ -413,7 +421,8 @@ enum ChatGPTAttention {
     }
 
     /// Desktop-app threads active in the last day; only names and paths, never the conversation.
-    static func threads() -> [Thread] {
+    /// nil when the database is there but couldn't be read this time; the caller keeps what it had.
+    static func threads() -> [Thread]? {
         guard FileManager.default.fileExists(atPath: database) else { return [] }
         let sql = """
             SELECT id, COALESCE(NULLIF(name, ''), title) AS title, cwd,
@@ -425,8 +434,9 @@ enum ChatGPTAttention {
             ORDER BY updated_at DESC LIMIT 50
             """
         let result = Shell.run("/usr/bin/sqlite3", ["-readonly", "-json", "file:\(database)?mode=ro", sql])
-        guard result.status == 0, !result.output.isEmpty else { return [] }
-        return (try? JSONDecoder().decode([Thread].self, from: Data(result.output.utf8))) ?? []
+        guard result.status == 0 else { return nil }
+        if result.output.isEmpty { return [] }
+        return try? JSONDecoder().decode([Thread].self, from: Data(result.output.utf8))
     }
 
     /// Where a thread's latest turn stands.
@@ -476,10 +486,11 @@ enum ChatGPTAttention {
     /// Each thread's turn, remembered by last update so unchanged logs aren't read again.
     typealias Cache = [String: (updated: Double, turn: Turn)]
 
-    static func scan(cache: Cache) -> (snapshots: [Snapshot], cache: Cache) {
+    static func scan(cache: Cache) -> (snapshots: [Snapshot], cache: Cache)? {
+        guard let threads = threads() else { return nil }
         var next: Cache = [:]
         var snapshots: [Snapshot] = []
-        for thread in threads() {
+        for thread in threads {
             let turn: Turn?
             if let known = cache[thread.id], known.updated == thread.updated_ms {
                 turn = known.turn
@@ -507,7 +518,7 @@ enum ChatGPTAttention {
     /// One poll's worth of change. A turn that finishes while the app isn't in front shows as
     /// finished; it goes when you switch to the app, start another turn, or archive the thread.
     /// Stopping a turn is something you did, so it never shows.
-    static func step(_ memory: Memory, snapshots: [Snapshot], appInFront: Bool) -> Memory {
+    static func step(_ memory: Memory, snapshots: [Snapshot], appInFront: Bool, now: Date = .now) -> Memory {
         var next = memory
         var turns: [String: Turn] = [:]
         for snapshot in snapshots {
@@ -521,8 +532,11 @@ enum ChatGPTAttention {
             case .running, .stopped:
                 next.items[id] = nil
             case .done:
-                // A thread new to the list was just updated, so its finished turn is new too.
-                if (before == nil || before == .running), !appInFront {
+                // A thread new to the list counts only if it changed just now; one that merely came back
+                // into the list (or was missed while unreadable) finished long ago.
+                let updated = Date(timeIntervalSince1970: snapshot.thread.updated_ms / 1000)
+                let isNew = before == nil && now.timeIntervalSince(updated) < WorkBuddyAttention.newWindow
+                if before == .running || isNew, !appInFront {
                     next.items[id] = item(snapshot.thread)
                 }
             }
