@@ -26,6 +26,7 @@ struct NotchView: View {
     @State private var contentHeight: CGFloat = 320
     @State private var headerSlot = CGRect.zero
     @State private var resetToken = 0
+    @State private var tokenOpens = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var open: Bool { model.isExpanded }
@@ -87,7 +88,14 @@ struct NotchView: View {
         let top = model.notchHeight
         return VStack(spacing: 0) {
             Color.clear.frame(height: model.notchHeight)
-            PopoverView(store: jobs, onDetailChange: { model.showingDetail = $0 }, resetToken: resetToken)
+            Group {
+                switch model.content {
+                case .tasks:
+                    PopoverView(store: jobs, onDetailChange: { model.showingDetail = $0 }, resetToken: resetToken)
+                case .tokens:
+                    TokenPanel(openToken: tokenOpens)
+                }
+            }
                 .environment(\.notchModel, model)
                 .environment(\.notchStyle, true)
                 .environment(\.panelWidth, NotchModel.panelWidth - 16)
@@ -108,14 +116,17 @@ struct NotchView: View {
         .allowsHitTesting(open)
     }
 
-    private func openPanel() {
+    private func openPanel(_ content: NotchModel.PanelContent = .tasks) {
         store.clearArrival()
+        if content == .tokens { tokenOpens += 1 }
+        model.content = content
+        model.showingDetail = false
         withAnimation(.notchOpen) { model.isExpanded = true }
     }
 
     // MARK: - Click
 
-    /// Today's tokens in the right wing, always shown and dimmed. Clicking it opens the dashboard.
+    /// Today's tokens in the right wing, always shown and dimmed. Clicking it opens the token panel.
     private var tokenText: some View {
         let shown = tokenLabel != nil && !open
         return Text(tokenLabel ?? " ")
@@ -126,8 +137,8 @@ struct NotchView: View {
             .minimumScaleFactor(0.75)
             .frame(width: wing - 4, height: model.notchHeight)
             .contentShape(Rectangle())
-            .onTapGesture { DashboardWindow.shared.show() }
-            .help("Today's tokens. Click to open the tokenboard dashboard")
+            .onTapGesture { openPanel(.tokens) }
+            .help("Today's tokens. Click for today by agent and model, and the last seven days")
             .offset(x: rightEdge, y: tokenLabel != nil ? 0 : drift)
             .opacity(shown ? 1 : 0)
             .blur(radius: shown || reduceMotion ? 0 : 3)
@@ -151,6 +162,7 @@ struct NotchView: View {
             }
             .contextMenu {
                 Button("Scheduled Tasks") { openPanel() }
+                Button("Today's Tokens") { openPanel(.tokens) }
                 Button("Open Dashboard") { DashboardWindow.shared.show() }
                 Divider()
                 Toggle("Play Sound", isOn: Binding(get: { store.playsSound }, set: { store.playsSound = $0; if $0 { ArrivalSound.play() } }))

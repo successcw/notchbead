@@ -52,6 +52,83 @@ enum TokenBoard {
         )
     }
 
+    // MARK: - The token panel
+
+    /// One row of a breakdown: an agent or a model.
+    struct Share: Equatable, Sendable, Identifiable {
+        var key: String
+        var tokens: Int
+        var cost: Double
+        var costPartial: Bool
+        var id: String { key }
+    }
+
+    /// One day's tokens per agent.
+    struct Day: Equatable, Sendable, Identifiable {
+        var day: String
+        var bySource: [String: Int]
+        var id: String { day }
+        var total: Int { bySource.values.reduce(0, +) }
+    }
+
+    /// What the token panel shows: today by agent and by model, and the last seven days.
+    struct Stats: Equatable, Sendable {
+        var agents: [Share]
+        var models: [Share]
+        var week: [Day]
+        var total: Int { agents.reduce(0) { $0 + $1.tokens } }
+        var cost: Double { agents.reduce(0) { $0 + $1.cost } }
+        var costPartial: Bool { agents.contains(where: \.costPartial) }
+    }
+
+    /// nil when the service isn't running or answers with something unexpected.
+    static func stats(now: Date = .now) async -> Stats? {
+        let today = dayString(now)
+        let weekStart = dayString(Calendar.current.date(byAdding: .day, value: -6, to: now) ?? now)
+        async let agents = get("api/breakdown", ["start": today, "end": today, "metric": "total", "by": "source"])
+        async let models = get("api/breakdown", ["start": today, "end": today, "metric": "total", "by": "model"])
+        async let daily = get("api/daily", ["start": weekStart, "end": today, "metric": "total"])
+        guard let agentData = await agents, let modelData = await models, let dailyData = await daily,
+              let agentRows = shares(agentData), let modelRows = shares(modelData), let week = days(dailyData)
+        else { return nil }
+        return Stats(agents: agentRows, models: modelRows, week: week)
+    }
+
+    static func shares(_ data: Data) -> [Share]? {
+        struct Breakdown: Decodable {
+            struct Row: Decodable { var key: String; var value: Double; var cost: Double?; var cost_partial: Bool? }
+            var rows: [Row]
+        }
+        guard let breakdown = try? JSONDecoder().decode(Breakdown.self, from: data) else { return nil }
+        return breakdown.rows.map { Share(key: $0.key, tokens: Int($0.value), cost: $0.cost ?? 0, costPartial: $0.cost_partial ?? false) }
+    }
+
+    static func days(_ data: Data) -> [Day]? {
+        struct Daily: Decodable { var days: [String]; var series: [String: [Double]] }
+        guard let daily = try? JSONDecoder().decode(Daily.self, from: data) else { return nil }
+        return daily.days.enumerated().map { index, day in
+            Day(day: day, bySource: daily.series.compactMapValues { index < $0.count ? Int($0[index]) : nil })
+        }
+    }
+
+    /// Asks the service to collect now (the dashboard's 采集); true once it has finished.
+    static func collect() async -> Bool {
+        var request = URLRequest(url: baseURL.appending(path: "api/ingest"), timeoutInterval: 120)
+        request.httpMethod = "POST"
+        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return false }
+        return (response as? HTTPURLResponse)?.statusCode == 200
+    }
+
+    private static func get(_ path: String, _ query: [String: String]) async -> Data? {
+        var parts = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
+        parts.queryItems = query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
+        var request = URLRequest(url: parts.url!, timeoutInterval: 3)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return data
+    }
+
     static func dayString(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -66,6 +143,18 @@ enum TokenText {
     /// Always in 亿 (10^8) with two decimals: 201_000_000 → "2.01亿", 1_903_000_000 → "19.03亿".
     static func yi(_ value: Int) -> String {
         String(format: "%.2f亿", Double(value) / 1e8)
+    }
+
+    /// For smaller amounts: 亿 from 0.1亿 up, 万 below that: "1.95亿", "222万", "<1万".
+    static func compact(_ value: Int) -> String {
+        if value >= 10_000_000 { return yi(value) }
+        if value >= 10_000 { return "\(value / 10_000)万" }
+        return value > 0 ? "<1万" : "0"
+    }
+
+    /// "$91.22", with a "+" when some of it has no known price.
+    static func cost(_ value: Double, partial: Bool) -> String {
+        String(format: "$%.2f", value) + (partial ? "+" : "")
     }
 }
 

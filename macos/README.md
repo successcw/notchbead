@@ -8,7 +8,7 @@ Shows what your agents are waiting on you for, in the notch (or the menu bar on 
 
 Each item goes away by itself once it's handled: you switch to that Orca project, the agent carries on, or the WorkBuddy session runs again (a normal finish also clears when you switch to WorkBuddy; a ChatGPT task clears when you switch to ChatGPT or start another turn). Clicking the notch goes straight to the next item (for Orca, the exact pane), most urgent first: waiting on you, then errors, then finished. Click again for the one after; once every item has had a turn it starts over.
 
-The notch never changes size: a small wing is always out on each side. The right one shows today's token use in 亿 (10^8), dimmed, such as `2.01亿`. When something needs you, the left one fills with the icon of the app that wants you and Bead, onit's mascot, blue and following your pointer, with a small count of how many on its top-right corner that moves with it. When several apps want you, their icons take turns, each drifting up and fading out as the next rises in. Bead hops and a short chime plays (three soft rising pips) when something new arrives; turn it off with Play Sound in the right-click menu. Click the token figure, choose Open Dashboard from the notch's right-click menu, or open NotchBead again from Spotlight to see tokenboard's page in a window of its own. Right-click the notch also has Play Sound, Open at Login and Quit.
+The notch never changes size: a small wing is always out on each side. The right one shows today's token use in 亿 (10^8), dimmed, such as `2.01亿`. When something needs you, the left one fills with the icon of the app that wants you and Bead, onit's mascot, blue and following your pointer, with a small count of how many on its top-right corner that moves with it. When several apps want you, their icons take turns, each drifting up and fading out as the next rises in. Bead hops and a short chime plays (three soft rising pips) when something new arrives; turn it off with Play Sound in the right-click menu. Click the token figure and the notch opens into a token panel: today's total and cost, the last seven days stacked by agent (in the dashboard's colours), today split by agent or by model, 采集 (collect now), and a button for the full dashboard. That button, Open Dashboard in the notch's right-click menu, or opening NotchBead again from Spotlight shows tokenboard's page in a window of its own. Right-click the notch also has Play Sound, Open at Login and Quit.
 
 ## What it reads
 
@@ -46,6 +46,6 @@ make icon      # redraw the white app icon
 make sound     # rewrite the arrival chime from SupportFiles/generate-sound.py
 ```
 
-To see the notch without waiting on an agent: `open --env NOTCHBEAD_DEMO=1 NotchBead.app` adds a sample item after a few seconds; `open --env NOTCHBEAD_OPEN=1 NotchBead.app` opens the scheduled-tasks panel at launch.
+To see the notch without waiting on an agent: `open --env NOTCHBEAD_DEMO=1 NotchBead.app` adds a sample item after a few seconds; `open --env NOTCHBEAD_OPEN=1 NotchBead.app` opens the scheduled-tasks panel at launch (`NOTCHBEAD_OPEN=tokens` the token panel).
 
 Needs macOS 26 and Xcode 26 (Swift 6.2). The notch window technique is adapted from [onit](https://github.com/neethanwu/onit) (MIT).

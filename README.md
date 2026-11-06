@@ -242,7 +242,9 @@ model is called in the database, hover over it on the 模型 (model) tab: the ra
   It comes from the tokenboard service (`/api/breakdown`) every 15 seconds, and at once after you click 采集
   (collect now) in the dashboard window; the service itself collects every 5 minutes,
   so it can trail live use by a few minutes. Hidden when the service isn't running.
-- **Dashboard window**: click the token figure, choose Open Dashboard from the right-click menu, or open
+- **Token panel**: click the token figure and the notch opens into today's total and cost, the last seven days
+  stacked by agent, and today split by agent or by model, with 采集 (collect now) and a button for the full dashboard.
+- **Dashboard window**: click that button in the token panel, choose Open Dashboard from the right-click menu, or open
   NotchBead again from Spotlight, and the same page opens in a native window (in the Dock and Cmd-Tab while
   open).
 

@@ -74,6 +74,9 @@ final class NotchModel {
         didSet { if oldValue != isExpanded { onExpandChange?(isExpanded) } }
     }
     @ObservationIgnored var onExpandChange: ((Bool) -> Void)?
+    /// What the open panel shows: your scheduled tasks, or today's tokens.
+    var content: PanelContent = .tasks
+    enum PanelContent { case tasks, tokens }
     /// Set by the panel so Escape steps back from a task's detail before closing the panel.
     var showingDetail = false
     /// A "more" menu is open, so Bead in the panel header steps back with the rest of the panel.
@@ -138,10 +141,11 @@ final class NotchWindowController {
         model.windowFrame = frame
         panel.orderFrontRegardless()
         trackPointer()
-        // NOTCHBEAD_OPEN=1 opens the scheduled-tasks panel at launch, for screenshots.
-        if ProcessInfo.processInfo.environment["NOTCHBEAD_OPEN"] == "1", !model.isExpanded {
+        // NOTCHBEAD_OPEN=1 (or =tokens) opens the scheduled-tasks (or token) panel at launch, for screenshots.
+        if let open = ProcessInfo.processInfo.environment["NOTCHBEAD_OPEN"], !model.isExpanded {
             Task { @MainActor [model] in
                 try? await Task.sleep(for: .seconds(2))
+                model.content = open == "tokens" ? .tokens : .tasks
                 withAnimation(.notchOpen) { model.isExpanded = true }
             }
         }

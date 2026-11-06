@@ -33,3 +33,23 @@ import Testing
         #expect(TokenBoard.dayString(Date(timeIntervalSince1970: 0)).count == 10)
     }
 }
+
+@Suite struct TokenPanelTests {
+    @Test func readsBreakdownRowsAndDays() throws {
+        let rows = try #require(TokenBoard.shares(Data(#"{"rows":[{"key":"pi","value":203000000,"cost":4.86,"cost_partial":false},{"key":"codex","value":2220650,"cost":0,"cost_partial":true}]}"#.utf8)))
+        #expect(rows.map(\.key) == ["pi", "codex"])
+        #expect(rows[1].costPartial)
+        let days = try #require(TokenBoard.days(Data(#"{"days":["2026-11-05","2026-11-06"],"series":{"pi":[10,20],"codex":[1,2]}}"#.utf8)))
+        #expect(days.map(\.total) == [11, 22])
+        #expect(TokenBoard.days(Data("nope".utf8)) == nil)
+    }
+
+    @Test func compactAndCost() {
+        #expect(TokenText.compact(196_000_000) == "1.96亿")
+        #expect(TokenText.compact(2_220_650) == "222万")
+        #expect(TokenText.compact(5_000) == "<1万")
+        #expect(TokenText.compact(0) == "0")
+        #expect(TokenText.cost(91.2249, partial: false) == "$91.22")
+        #expect(TokenText.cost(0, partial: true) == "$0.00+")
+    }
+}
