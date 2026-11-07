@@ -32,6 +32,7 @@ final class AttentionStore {
     private var dismissed: Set<String>
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
+    @ObservationIgnored private var spaceObserver: NSObjectProtocol?
     @ObservationIgnored private var ingestObserver: NSObjectProtocol?
     @ObservationIgnored private var seen: Set<String>?
     @ObservationIgnored private var arrivalTask: Task<Void, Never>?
@@ -97,10 +98,16 @@ final class AttentionStore {
         ) { [weak self] _ in
             _ = MainActor.assumeIsolated { Task { await self?.refresh() } }
         }
+        // Moving to another desktop can leave the same app frontmost, though you no longer see it.
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            _ = MainActor.assumeIsolated { Task { await self?.refresh() } }
+        }
     }
 
     func refresh() async {
-        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let front = visibleFrontmostApp()
         let cache = chatGPTCache
         let orcaInFront = front == OrcaAttention.bundleID
         let focusedPane = orca.focusedPane

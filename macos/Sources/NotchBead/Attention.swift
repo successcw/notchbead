@@ -675,3 +675,25 @@ func activate(bundleID: String) {
         if let error { NSLog("NotchBead: could not bring \(bundleID) forward: \(error.localizedDescription)") }
     }
 }
+
+/// The frontmost app, but only when you can see it: it has a window on the desktop you're on.
+/// Switching to another desktop that no app claims leaves the old app frontmost, and minimised or
+/// hidden apps can stay frontmost too; in those cases nothing counts as in front.
+@MainActor
+func visibleFrontmostApp() -> String? {
+    guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+    guard !app.isHidden, hasWindowOnCurrentDesktop(pid: app.processIdentifier) else { return nil }
+    return app.bundleIdentifier
+}
+
+/// Whether the process has an ordinary window on screen right now. The on-screen list covers only
+/// the current desktop, and owner and layer need no screen-recording permission.
+func hasWindowOnCurrentDesktop(pid: pid_t) -> Bool {
+    guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+        as? [[String: Any]] else { return true }
+    return windows.contains { window in
+        (window[kCGWindowOwnerPID as String] as? pid_t) == pid
+            && (window[kCGWindowLayer as String] as? Int) == 0
+            && ((window[kCGWindowBounds as String] as! CFDictionary?).flatMap { CGRect(dictionaryRepresentation: $0) }?.width ?? 0) > 50
+    }
+}
