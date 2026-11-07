@@ -199,6 +199,15 @@ struct NotchView: View {
     /// Blue for what needs you while closed; in the panel, how your scheduled tasks are.
     private var showsAttention: Bool { present && !open }
 
+    /// Bead in the wing with nothing needing you and no task failing or needing a look.
+    private var quietInWing: Bool {
+        guard inWing, !showsAttention else { return false }
+        switch jobs.overallState {
+        case .empty, .ok, .running: return true
+        case .headsUp, .failed: return false
+        }
+    }
+
     private var beadCenter: CGPoint {
         if !inWing { return CGPoint(x: headerSlot.midX, y: headerSlot.midY) }
         let x = showsAttention ? leftEdge + 3 + Self.iconSize + 4 + NotchModel.wingBeadSize / 2 : leftEdge + wing / 2
@@ -216,8 +225,10 @@ struct NotchView: View {
             pokes: pokes + model.beadPokes,
             badge: showsAttention ? max(store.visible.count, 1) : nil
         )
-        // Grey while it just dozes in the wing, so it stays quiet next to the notch.
-        .opacity(model.menuOpen && !inWing ? 0.35 : (inWing && !showsAttention && jobs.overallState == .ok || jobs.overallState == .empty) && inWing ? 0.55 : 1)
+        // In the wing, blue means something needs you. A scheduled task that is just running (or
+        // nothing at all) stays grey so it isn't mistaken for that; amber and red keep their colour.
+        .saturation(quietInWing ? 0 : 1)
+        .opacity(model.menuOpen && !inWing ? 0.35 : quietInWing ? 0.55 : 1)
         .animation(.easeOut(duration: 0.18), value: model.menuOpen)
         .offset(x: center.x - size / 2, y: center.y - size / 2)
         .animation(.notchOpen, value: inWing)
