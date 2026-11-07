@@ -594,20 +594,58 @@ enum ChatGPTChats {
         return try? JSONDecoder().decode([Turn].self, from: Data(result.output.utf8))
     }
 
+    /// A recent chat and when it last changed.
+    struct Chat: Decodable, Equatable, Sendable {
+        var thread_id: String
+        var title: String?
+        var updated: Double
+    }
+
+    /// The most recently changed chats; nil when the database couldn't be read this time.
+    static func recentChats() -> [Chat]? {
+        guard FileManager.default.fileExists(atPath: database) else { return [] }
+        let sql = """
+            SELECT thread_id, display_title AS title, source_updated_at AS updated
+            FROM local_thread_catalog WHERE source_kind = 'chatgpt'
+            ORDER BY source_recency_at DESC LIMIT 20
+            """
+        let result = Shell.run("/usr/bin/sqlite3", ["-readonly", "-json", "file:\(database)?mode=ro", sql])
+        guard result.status == 0 else { return nil }
+        if result.output.isEmpty { return [] }
+        return try? JSONDecoder().decode([Chat].self, from: Data(result.output.utf8))
+    }
+
     struct Memory: Equatable, Sendable {
         /// Chats replying at the last poll, with their titles; nil before the first poll.
         var active: [String: String]?
+        /// When each recent chat last changed; nil before the first good read.
+        var updated: [String: Double]?
         var items: [String: AttentionItem] = [:]
     }
 
-    /// A reply that finishes while ChatGPT isn't in front shows as finished. It goes when you switch
-    /// to ChatGPT or send that chat something new.
-    static func step(_ memory: Memory, active turns: [Turn], appInFront: Bool, now: Date = .now) -> Memory {
+    /// A reply that finishes while ChatGPT isn't in front shows as finished. A quick reply can start
+    /// and end between two polls, so a chat that changes while ChatGPT isn't in front counts too.
+    /// It goes when you switch to ChatGPT or send that chat something new.
+    static func step(_ memory: Memory, active turns: [Turn], recent: [Chat]? = nil, appInFront: Bool, now: Date = .now) -> Memory {
         var next = memory
         var active: [String: String] = [:]
         for turn in turns { active[turn.thread_id] = turn.title ?? memory.active?[turn.thread_id] ?? "" }
+        var finished: [String: String] = [:]
         if let before = memory.active {
-            for (id, title) in before where active[id] == nil && !appInFront {
+            for (id, title) in before where active[id] == nil { finished[id] = title }
+        }
+        if let recent {
+            if let before = memory.updated {
+                for chat in recent where chat.updated > (before[chat.thread_id] ?? now.timeIntervalSince1970 - 3 * 60) {
+                    finished[chat.thread_id] = chat.title ?? finished[chat.thread_id] ?? ""
+                }
+            }
+            var updated = memory.updated ?? [:]
+            for chat in recent { updated[chat.thread_id] = max(chat.updated, updated[chat.thread_id] ?? 0) }
+            next.updated = updated
+        }
+        if !appInFront {
+            for (id, title) in finished where next.items[id] == nil {
                 next.items[id] = AttentionItem(
                     id: "chatgpt-chat:\(id):\(Int(now.timeIntervalSince1970))",
                     source: .chatGPT, kind: .finished,

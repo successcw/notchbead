@@ -104,9 +104,9 @@ final class AttentionStore {
         let cache = chatGPTCache
         let orcaInFront = front == OrcaAttention.bundleID
         let focusedPane = orca.focusedPane
-        let (orcaStatus, sessions, threads, chatTurns) = await Task.detached(priority: .utility) {
+        let (orcaStatus, sessions, threads, chatTurns, recentChats) = await Task.detached(priority: .utility) {
             (OrcaAttention.scan(orcaIsFrontmost: orcaInFront, focusedPane: focusedPane), WorkBuddyAttention.sessions(),
-             ChatGPTAttention.scan(cache: cache), ChatGPTChats.activeTurns())
+             ChatGPTAttention.scan(cache: cache), ChatGPTChats.activeTurns(), ChatGPTChats.recentChats())
         }.value
         // A source that couldn't be read this time (nil) keeps what it had: reading nothing would look
         // like everything went away, and the next good read would then look like everything was new.
@@ -126,8 +126,11 @@ final class AttentionStore {
             chatGPT = ChatGPTAttention.step(chatGPT, snapshots: threads.snapshots, appInFront: front == ChatGPTAttention.bundleID)
         }
         if let chatTurns {
+            if chatTurns.map(\.thread_id) != lastChats.map(\.thread_id) {
+                Self.log.notice("chat turns \(chatTurns.count) front=\(front == ChatGPTAttention.bundleID)")
+            }
             lastChats = chatTurns
-            chats = ChatGPTChats.step(chats, active: chatTurns, appInFront: front == ChatGPTAttention.bundleID)
+            chats = ChatGPTChats.step(chats, active: chatTurns, recent: recentChats, appInFront: front == ChatGPTAttention.bundleID)
         }
         var found = orcaItems + Array(workBuddy.items.values) + Array(chatGPT.items.values) + Array(chats.items.values)
         let busy = lastOrca.working + WorkBuddyAttention.workingCount(lastSessions) + ChatGPTAttention.workingCount(lastThreads)

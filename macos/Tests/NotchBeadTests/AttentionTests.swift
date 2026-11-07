@@ -370,3 +370,45 @@ struct ChatGPTAttentionTests {
         #expect(memory.items.isEmpty)
     }
 }
+
+@Suite struct ChatGPTRecentChatTests {
+    typealias C = ChatGPTChats
+    static let start = Date(timeIntervalSince1970: 1_000_000)
+    static func chat(_ updated: Double) -> C.Chat { C.Chat(thread_id: "t", title: "Plan a weekend trip", updated: updated) }
+
+    @Test func aChatThatChangesWhileYouAreElsewhereShows() {
+        // The reply started and ended between two polls, so it was never seen replying.
+        var memory = C.step(C.Memory(), active: [], recent: [Self.chat(100)], appInFront: false, now: Self.start)
+        #expect(memory.items.isEmpty)
+        memory = C.step(memory, active: [], recent: [Self.chat(200)], appInFront: false, now: Self.start)
+        #expect(memory.items["t"]?.title == "Plan a weekend trip")
+        // No change on the next poll keeps the same item.
+        let id = memory.items["t"]?.id
+        memory = C.step(memory, active: [], recent: [Self.chat(200)], appInFront: false, now: Self.start.addingTimeInterval(3))
+        #expect(memory.items["t"]?.id == id)
+    }
+
+    @Test func notWhileChatGPTIsInFront() {
+        var memory = C.step(C.Memory(), active: [], recent: [Self.chat(100)], appInFront: true, now: Self.start)
+        memory = C.step(memory, active: [], recent: [Self.chat(200)], appInFront: true, now: Self.start)
+        #expect(memory.items.isEmpty)
+        // Going elsewhere afterwards doesn't bring back the change you already saw.
+        memory = C.step(memory, active: [], recent: [Self.chat(200)], appInFront: false, now: Self.start)
+        #expect(memory.items.isEmpty)
+    }
+
+    @Test func aNewChatCountsOnlyIfRecent() {
+        let now = Self.start.timeIntervalSince1970
+        var memory = C.step(C.Memory(), active: [], recent: [], appInFront: false, now: Self.start)
+        memory = C.step(memory, active: [], recent: [C.Chat(thread_id: "old", title: "a", updated: now - 3600)], appInFront: false, now: Self.start)
+        #expect(memory.items.isEmpty)
+        memory = C.step(memory, active: [], recent: [C.Chat(thread_id: "new", title: "b", updated: now - 10)], appInFront: false, now: Self.start)
+        #expect(memory.items["new"] != nil)
+    }
+
+    @Test func aFailedReadLearnsNothing() {
+        var memory = C.step(C.Memory(), active: [], recent: nil, appInFront: false, now: Self.start)
+        memory = C.step(memory, active: [], recent: [Self.chat(200)], appInFront: false, now: Self.start)
+        #expect(memory.items.isEmpty)
+    }
+}
