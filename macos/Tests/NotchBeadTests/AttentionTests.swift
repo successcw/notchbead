@@ -102,22 +102,43 @@ struct OrcaAttentionTests {
         #expect(first != nil && second != nil && first != second)
     }
 
+    /// d:1 in a workspace in the background, t:1 in the one Orca shows.
+    static func two(_ d: String, _ t: String) -> [O.Worktree] {
+        O.decode(Self.response([
+            Self.worktree(active: false, unread: false, agents: Self.claude(d, pane: "d:1")),
+            Self.worktree(active: true, unread: false, agents: Self.claude(t, pane: "t:1")),
+        ]))
+    }
+
+    @Test func goingToTheWorkspaceInOrcaClearsItsFinish() {
+        var m = O.step(O.Memory(), worktrees: Self.two("working", "done"), orcaIsFrontmost: false)
+        m = O.step(m, worktrees: Self.two("done", "done"), orcaIsFrontmost: false)
+        #expect(m.items["d:1|claude"] != nil)
+        // Orca in front, but showing another workspace: still there.
+        m = O.step(m, worktrees: Self.two("done", "done"), orcaIsFrontmost: true)
+        #expect(m.items["d:1|claude"] != nil)
+        // You open that workspace yourself.
+        let shown = O.decode(Self.response([Self.worktree(active: true, unread: false, agents: Self.claude("done", pane: "d:1"))]))
+        m = O.step(m, worktrees: shown, orcaIsFrontmost: true)
+        #expect(m.items.isEmpty)
+    }
+
     @Test func aReplyInAnotherOrcaPaneShowsEvenWithOrcaInFront() {
-        // Asked in one project (d:1), then sent something here (t:1): t:1 is where you are now.
+        // Asked in a project in the background (d:1), then sent something here (t:1): t:1 is where you are now.
         let t0 = Date(timeIntervalSince1970: 100)
-        var m = O.step(O.Memory(), worktrees: Self.trees(Self.claude("done", pane: "d:1"), Self.claude("done", pane: "t:1")), orcaIsFrontmost: true, now: t0)
-        m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "d:1"), Self.claude("done", pane: "t:1")), orcaIsFrontmost: true, now: t0 + 1)
-        m = O.step(m, worktrees: Self.trees(Self.claude("working", pane: "d:1"), Self.claude("working", pane: "t:1")), orcaIsFrontmost: true, now: t0 + 2)
+        var m = O.step(O.Memory(), worktrees: Self.two("done", "done"), orcaIsFrontmost: true, now: t0)
+        m = O.step(m, worktrees: Self.two("working", "done"), orcaIsFrontmost: true, now: t0 + 1)
+        m = O.step(m, worktrees: Self.two("working", "working"), orcaIsFrontmost: true, now: t0 + 2)
         #expect(m.focusedPane == "t:1")
         // That project answers while you're here, in the same Orca: it shows.
-        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "d:1"), Self.claude("working", pane: "t:1")), orcaIsFrontmost: true, now: t0 + 3)
+        m = O.step(m, worktrees: Self.two("done", "working"), orcaIsFrontmost: true, now: t0 + 3)
         #expect(m.items["d:1|claude"] != nil)
         // The agent you're talking to answers: you're looking at it, so nothing.
-        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "d:1"), Self.claude("done", pane: "t:1")), orcaIsFrontmost: true, now: t0 + 4)
+        m = O.step(m, worktrees: Self.two("done", "done"), orcaIsFrontmost: true, now: t0 + 4)
         #expect(m.items["t:1|claude"] == nil)
         // ...but with Orca behind another app, it would.
-        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "d:1"), Self.claude("working", pane: "t:1")), orcaIsFrontmost: false, now: t0 + 5)
-        m = O.step(m, worktrees: Self.trees(Self.claude("done", pane: "d:1"), Self.claude("done", pane: "t:1")), orcaIsFrontmost: false, now: t0 + 6)
+        m = O.step(m, worktrees: Self.two("done", "working"), orcaIsFrontmost: false, now: t0 + 5)
+        m = O.step(m, worktrees: Self.two("done", "done"), orcaIsFrontmost: false, now: t0 + 6)
         #expect(m.items["t:1|claude"] != nil)
     }
 

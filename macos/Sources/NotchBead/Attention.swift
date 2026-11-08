@@ -176,14 +176,18 @@ enum OrcaAttention {
         var focusedPane: String? { started.max { $0.value < $1.value }?.key }
     }
 
-    /// An agent of yours going from working to done is a finished item, unless Orca is in front and it's
-    /// the pane you last sent something in. It goes when the agent works again, when you click it,
-    /// or when the pane closes.
+    /// An agent of yours going from working to done is a finished item, unless you're looking at it:
+    /// Orca is in front showing its workspace, or it's the pane you last sent something in. It goes
+    /// when you look at it that way, when the agent works again, when you click it, or when the pane closes.
     static func step(_ memory: Memory, worktrees: [Worktree], orcaIsFrontmost: Bool, now: Date = .now) -> Memory {
         var next = memory
         var states: [String: String] = [:]
         for worktree in worktrees {
+            let workspaceOnScreen = orcaIsFrontmost && worktree.isActive == true
             for agent in (worktree.agents ?? []) where agent.isYours {
+                defer {
+                    if workspaceOnScreen || (orcaIsFrontmost && next.focusedPane == agent.paneKey) { next.items[agent.key] = nil }
+                }
                 let state = agent.current
                 states[agent.key] = state
                 guard let known = memory.states else { continue }
@@ -192,8 +196,7 @@ enum OrcaAttention {
                     if before != "working" { next.started[agent.paneKey] = now }
                     next.items[agent.key] = nil
                 } else if state == "done", before == "working" {
-                    let looking = orcaIsFrontmost && next.focusedPane == agent.paneKey
-                    if !looking { next.items[agent.key] = item(for: agent, kind: .finished, project: projectName(worktree)) }
+                    next.items[agent.key] = item(for: agent, kind: .finished, project: projectName(worktree))
                 }
             }
         }
