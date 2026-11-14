@@ -92,8 +92,7 @@ struct TokenPanel: View {
                     }
                 } label: {
                     Image(systemName: "arrow.clockwise")
-                        .rotationEffect(.degrees(collecting ? 360 : 0))
-                        .animation(collecting ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: collecting)
+                        .symbolEffect(.rotate, isActive: collecting)
                 }
                 .buttonStyle(CircleIconButtonStyle())
                 .disabled(collecting)

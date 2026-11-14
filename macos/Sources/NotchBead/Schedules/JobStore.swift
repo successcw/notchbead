@@ -58,6 +58,8 @@ final class JobStore {
     }
 
     func refresh() async {
+        // One scan at a time: opening the panel while the poll scans shouldn't start a second one.
+        guard !isRefreshing else { return }
         isRefreshing = true
         let scanned = await Task.detached(priority: .utility) {
             (LaunchdScanner.scan() + CronScanner.scan() + CodexAutomations.scan() + WorkBuddyAutomations.scan(),

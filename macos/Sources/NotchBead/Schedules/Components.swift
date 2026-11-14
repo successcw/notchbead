@@ -71,9 +71,15 @@ struct StatusDot: View {
             }
         }
         .frame(width: Metrics.dotColumn, height: 12)
-        .onAppear {
+        // A loop of short animations rather than `repeatForever`, which keeps running (and
+        // redrawing) after the task stops, even while the panel is folded away.
+        .task(id: job.state == .running && !reduceMotion) {
+            breathing = false
             guard job.state == .running, !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) { breathing = true }
+            while !Task.isCancelled {
+                withAnimation(.easeInOut(duration: 1)) { breathing.toggle() }
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
     }
 }

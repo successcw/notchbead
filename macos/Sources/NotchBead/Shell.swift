@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 struct ShellResult: Sendable {
     var status: Int32
@@ -7,9 +8,11 @@ struct ShellResult: Sendable {
 }
 
 enum Shell {
-    /// Runs a program and waits for it. Call from a background task.
+    /// Runs a program and waits for it, at most `timeout` seconds: after that it is stopped and the
+    /// result is a failure. (The Orca CLI sometimes hangs for minutes; each one held 85 MB.)
+    /// Call from a background task.
     @discardableResult
-    static func run(_ executable: String, _ arguments: [String]) -> ShellResult {
+    static func run(_ executable: String, _ arguments: [String], timeout: TimeInterval = 20) -> ShellResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -22,9 +25,20 @@ enum Shell {
         } catch {
             return ShellResult(status: -1, output: "", error: error.localizedDescription)
         }
+        // Signals go only to a process still waiting here, never to one whose number was reused.
+        let pid = process.processIdentifier
+        let exited = OSAllocatedUnfairLock(initialState: false)
+        let signal = { (sig: Int32) in exited.withLock { if !$0 { kill(pid, sig) } } }
+        let stop = DispatchWorkItem {
+            signal(SIGTERM)
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) { signal(SIGKILL) }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: stop)
         let outData = out.fileHandleForReading.readDataToEndOfFile()
         let errData = err.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        exited.withLock { $0 = true }
+        stop.cancel()
         return ShellResult(
             status: process.terminationStatus,
             output: String(decoding: outData, as: UTF8.self),

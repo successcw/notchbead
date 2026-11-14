@@ -70,10 +70,11 @@ struct BeadView: View {
 
     @State private var blink = false
     @State private var glance = CGVector.zero
-    @State private var runSide: CGFloat = 1
-    @State private var stride = false
-    @State private var breathe = false
-    @State private var float = false
+    /// Seconds into the current mood's slow motion (breathing, floating, running), stepped a few
+    /// times a second. Drawn from this clock rather than animated, those motions cost a dozen
+    /// redraws a second instead of one per display frame: a SwiftUI animation redraws the whole
+    /// notch window up to 120 times a second, which kept a breathing Bead at 30% CPU.
+    @State private var clock: Double = 0
     @State private var peek = false
     @State private var drip = false
     @State private var nudges = 0
@@ -82,13 +83,13 @@ struct BeadView: View {
 
     var body: some View {
         figure
-            .scaleEffect(x: breathe ? 1.05 : 1, y: breathe ? 1.12 : 1, anchor: .bottom)
+            .scaleEffect(x: 1 + 0.05 * breath, y: 1 + 0.12 * breath, anchor: .bottom)
             .overlay {
                 if let badge { CountBadge(count: badge).position(x: size, y: 2) }
             }
-            .offset(y: stride ? -size * 0.07 : 0)
-            .offset(y: float ? -size * 0.08 : size * 0.04)
-            .offset(x: mood == .onIt ? runSide * runRange : 0)
+            .offset(y: -size * 0.07 * stride)
+            .offset(y: mood == .nothing ? size * (0.04 - 0.12 * Self.wave(clock, period: 6)) : 0)
+            .offset(x: mood == .onIt ? runPosition * runRange : 0)
             .keyframeAnimator(initialValue: Nudge(), trigger: nudges) { content, nudge in
                 content.offset(x: nudge.x, y: nudge.y)
             } keyframes: { _ in
@@ -128,7 +129,7 @@ struct BeadView: View {
                 SpeedLines()
                     .stroke(mood.body.opacity(0.55), style: StrokeStyle(lineWidth: size * 0.07, lineCap: .round))
                     .frame(width: size * 0.3, height: size * 0.42)
-                    .offset(x: -runSide * size * 0.62)
+                    .offset(x: -runDirection * size * 0.62)
                     .transition(.opacity)
             }
             if mood == .nothing {
@@ -153,7 +154,7 @@ struct BeadView: View {
 
     private var eyes: some View {
         let dot = size * 0.17
-        let look = gaze ?? glance
+        let look = gaze ?? (mood == .onIt ? CGVector(dx: runDirection, dy: 0) : glance)
         // A dozing Bead opens its eyes when the pointer comes close.
         let closed = mood == .dozing && gaze == nil
         return HStack(spacing: size * 0.32 - dot) {
@@ -174,16 +175,33 @@ struct BeadView: View {
         .offset(x: look.dx * size * 0.08, y: -size * 0.05 + look.dy * size * 0.07)
     }
 
+    // MARK: - Slow motion, from the clock
+
+    /// 0 at the start of each period, 1 halfway, eased like easeInOut.
+    private static func wave(_ t: Double, period: Double) -> CGFloat {
+        CGFloat((1 - cos(2 * .pi * t / period)) / 2)
+    }
+
+    /// A dozing Bead breathes in over 2.4 seconds and out over 2.4.
+    private var breath: CGFloat { mood == .dozing ? Self.wave(clock, period: 4.8) : 0 }
+    /// Running: one end of the wing to the other in 1.1 seconds, and back.
+    private var runPosition: CGFloat { CGFloat(-cos(.pi * clock / 1.1)) }
+    private var runDirection: CGFloat { sin(.pi * clock / 1.1) >= 0 ? 1 : -1 }
+    /// A small jog in each step while running.
+    private var stride: CGFloat { mood == .onIt ? Self.wave(clock, period: 0.32) : 0 }
+
     // MARK: - Life
 
     /// Runs Bead's idle behaviour for the current mood until the mood changes.
+    /// Nothing here uses `repeatForever`: a forever animation keeps running after its value is
+    /// reset, so they piled up with each change of mood and kept the app redrawing every frame.
     private func live() async {
-        breathe = false
-        stride = false
-        float = false
-        peek = false
+        withAnimation(.easeOut(duration: 0.2)) {
+            clock = 0
+            peek = false
+            glance = .zero
+        }
         drip = false
-        glance = .zero
         guard !reduceMotion else { return }
         nudges += 1
 
@@ -191,10 +209,10 @@ struct BeadView: View {
             if mood != .dozing { group.addTask { await blinkLoop() } }
             switch mood {
             case .dozing:
-                withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
+                group.addTask { await tick(fps: 12) }
                 group.addTask { await peekLoop() }
             case .onIt:
-                group.addTask { await runLoop() }
+                group.addTask { await tick(fps: 15) }
             case .headsUp:
                 group.addTask { await glanceLoop() }
                 group.addTask { await nudgeLoop(every: 7...11) }
@@ -203,9 +221,21 @@ struct BeadView: View {
                 group.addTask { await dripLoop() }
                 group.addTask { await nudgeLoop(every: 6...10) }
             case .nothing:
-                withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) { float = true }
+                group.addTask { await tick(fps: 12) }
                 group.addTask { await glanceLoop() }
             }
+        }
+    }
+
+    /// Advances the clock `fps` times a second, without animation, until the mood changes.
+    private func tick(fps: Double) async {
+        let start = ContinuousClock.now
+        var plain = Transaction()
+        plain.disablesAnimations = true
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1 / fps))
+            let elapsed = ContinuousClock.now - start
+            withTransaction(plain) { clock = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18 }
         }
     }
 
@@ -257,17 +287,6 @@ struct BeadView: View {
             try? await Task.sleep(for: .seconds(Double.random(in: mood.glanceHold)))
             index = (index + 1) % glances.count
             withAnimation(.spring(duration: mood == .failed ? 0.6 : 0.3, bounce: 0)) { glance = glances[index] }
-        }
-    }
-
-    /// Back and forth along the wing, looking where it's going, with a small jog in each step.
-    private func runLoop() async {
-        withAnimation(.easeInOut(duration: 0.16).repeatForever(autoreverses: true)) { stride = true }
-        let leg = 1.1
-        while !Task.isCancelled {
-            withAnimation(.easeInOut(duration: leg)) { runSide = -runSide }
-            withAnimation(.spring(duration: 0.2, bounce: 0)) { glance = CGVector(dx: runSide, dy: 0) }
-            try? await Task.sleep(for: .seconds(leg))
         }
     }
 

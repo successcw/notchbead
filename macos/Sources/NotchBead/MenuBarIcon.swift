@@ -106,20 +106,27 @@ final class MenuBarBead {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var watcher: Task<Void, Never>?
 
-    /// Follows the store's mood for as long as the app runs.
-    func follow(_ store: AttentionStore) {
+    /// Follows the store's mood for as long as the app runs, and keeps still while the icon
+    /// isn't in the menu bar (there's a notch, or nothing needs you), so it costs nothing then.
+    func follow(_ store: AttentionStore, shown: @escaping @MainActor () -> Bool) {
         watcher = Task { [weak self] in
             while !Task.isCancelled {
-                self?.update(for: store.mood)
+                if shown() { self?.update(for: store.mood) } else { self?.stop() }
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
                         _ = store.mood
+                        _ = shown()
                     } onChange: {
                         continuation.resume()
                     }
                 }
             }
         }
+    }
+
+    private func stop() {
+        task?.cancel()
+        task = nil
     }
 
     func update(for mood: BeadMood) {

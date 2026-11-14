@@ -27,6 +27,9 @@ struct NotchView: View {
     @State private var headerSlot = CGRect.zero
     @State private var resetToken = 0
     @State private var tokenOpens = 0
+    /// The panel's content exists only while the panel is open or folding away. Kept around
+    /// invisibly, its animations (a running task's pulsing dot, for one) redrew the notch all day.
+    @State private var panelMounted = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var open: Bool { model.isExpanded }
@@ -73,11 +76,14 @@ struct NotchView: View {
         .environment(\.colorScheme, .dark)
         .onChange(of: store.arrival?.id) { _, id in if id != nil { pokes += 1 } }
         .onChange(of: open) { _, isOpen in
-            guard !isOpen else { return }
+            guard !isOpen else { panelMounted = true; return }
             // Back to the list once the panel has folded away, so it always reopens there.
             Task {
                 try? await Task.sleep(for: .seconds(0.4))
-                if !model.isExpanded { resetToken += 1 }
+                if !model.isExpanded {
+                    resetToken += 1
+                    panelMounted = false
+                }
             }
         }
     }
@@ -89,11 +95,13 @@ struct NotchView: View {
         return VStack(spacing: 0) {
             Color.clear.frame(height: model.notchHeight)
             Group {
-                switch model.content {
-                case .tasks:
-                    PopoverView(store: jobs, onDetailChange: { model.showingDetail = $0 }, resetToken: resetToken)
-                case .tokens:
-                    TokenPanel(openToken: tokenOpens)
+                if panelMounted || open {
+                    switch model.content {
+                    case .tasks:
+                        PopoverView(store: jobs, onDetailChange: { model.showingDetail = $0 }, resetToken: resetToken)
+                    case .tokens:
+                        TokenPanel(openToken: tokenOpens)
+                    }
                 }
             }
                 .environment(\.notchModel, model)
@@ -217,11 +225,12 @@ struct NotchView: View {
     private var bead: some View {
         let size = inWing ? NotchModel.wingBeadSize : NotchModel.headerBeadSize
         let center = beadCenter
-        return BeadView(
+        return GazingBead(
+            model: model,
+            center: center,
             mood: showsAttention ? store.mood : BeadMood(jobs.overallState),
             size: size,
             runRange: inWing ? (showsAttention ? 2 : 8) : 3,
-            gaze: gaze(from: center),
             pokes: pokes + model.beadPokes,
             badge: showsAttention ? max(store.visible.count, 1) : nil
         )
@@ -235,9 +244,25 @@ struct NotchView: View {
         .animation(.notchOpen, value: showsAttention)
         .allowsHitTesting(false)
     }
+}
+
+/// Bead with its eyes on the pointer. The pointer is read here rather than in NotchView, so a
+/// mouse move redraws only Bead and not the whole notch (its menus, panel and wings).
+private struct GazingBead: View {
+    let model: NotchModel
+    let center: CGPoint
+    let mood: BeadMood
+    let size: CGFloat
+    let runRange: CGFloat
+    let pokes: Int
+    let badge: Int?
+
+    var body: some View {
+        BeadView(mood: mood, size: size, runRange: runRange, gaze: gaze, pokes: pokes, badge: badge)
+    }
 
     /// Points Bead's eyes at the pointer when it's within reach, scaled by how close it is.
-    private func gaze(from center: CGPoint) -> CGVector? {
+    private var gaze: CGVector? {
         guard let mouse = model.mouse, model.windowFrame != .zero else { return nil }
         let screenCenter = CGPoint(x: model.windowFrame.minX + center.x, y: model.windowFrame.maxY - center.y)
         let dx = mouse.x - screenCenter.x

@@ -39,6 +39,8 @@ final class AttentionStore {
     @ObservationIgnored private let demoStart: Date? = .now
     /// What clicking has already jumped to this round, so each click goes to the next one.
     @ObservationIgnored private var visited: [String] = []
+    @ObservationIgnored private var refreshing = false
+    @ObservationIgnored private var refreshAgain = false
 
     private static let interval: Duration = .seconds(3)
     /// How often today's total is re-read without a nudge: catches the service's own collection
@@ -106,7 +108,20 @@ final class AttentionStore {
         }
     }
 
+    /// Checks every source once. Calls that come in while a check runs (the poll, switching apps,
+    /// switching desktops) are folded into one more check afterwards, not run alongside it: each
+    /// check starts the Orca CLI, which costs most of a second of CPU.
     func refresh() async {
+        if refreshing { refreshAgain = true; return }
+        refreshing = true
+        defer { refreshing = false }
+        repeat {
+            refreshAgain = false
+            await checkOnce()
+        } while refreshAgain
+    }
+
+    private func checkOnce() async {
         let front = visibleFrontmostApp()
         let cache = chatGPTCache
         let orcaInFront = front == OrcaAttention.bundleID
@@ -244,14 +259,19 @@ final class AttentionStore {
 
     // MARK: - Open at login
 
+    /// Read once and after each change: asking SMAppService is a blocking call to the system, and
+    /// the right-click menu reads this every time the notch redraws (as Bead's eyes follow the pointer).
+    private var loginItemEnabled = SMAppService.mainApp.status == .enabled
+
     var opensAtLogin: Bool {
-        get { SMAppService.mainApp.status == .enabled }
+        get { loginItemEnabled }
         set {
             do {
                 if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             } catch {
                 NSLog("NotchBead: could not change login item: \(error.localizedDescription)")
             }
+            loginItemEnabled = SMAppService.mainApp.status == .enabled
         }
     }
 }

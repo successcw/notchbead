@@ -18,7 +18,7 @@ struct NotchBeadApp: App {
         _store = State(initialValue: store)
         _display = State(initialValue: display)
         let menuBead = MenuBarBead()
-        menuBead.follow(store)
+        menuBead.follow(store) { display.showsMenuBarIcon && !store.visible.isEmpty }
         _menuBead = State(initialValue: menuBead)
     }
 

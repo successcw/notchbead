@@ -165,6 +165,10 @@ final class NotchWindowController {
             guard let self else { return }
             let location = NSEvent.mouseLocation
             if let last = model.mouse, hypot(last.x - location.x, last.y - location.y) < 2 { return }
+            // Bead only looks within 420pt; out there, one far-away point is all it needs to know.
+            let frame = model.windowFrame
+            let far = { (point: CGPoint) in hypot(point.x - frame.midX, point.y - frame.maxY) > 500 }
+            if far(location), model.mouse.map(far) ?? true { return }
             model.mouse = location
         }
         if let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { _ in
