@@ -433,3 +433,18 @@ struct ChatGPTAttentionTests {
         #expect(memory.items.isEmpty)
     }
 }
+
+@Suite struct OrcaBridgeTests {
+    private let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+    @Test func aPluginThatRanTodayIsCountedOn() {
+        #expect(OrcaBridge.isTrusted(seen: now.addingTimeInterval(-3 * 3600), now: now))
+    }
+
+    @Test func noMarkOrAnOldOneMeansItIsNot() {
+        #expect(!OrcaBridge.isTrusted(seen: nil, now: now))
+        #expect(!OrcaBridge.isTrusted(seen: now.addingTimeInterval(-13 * 3600), now: now))
+        // A time far in the future isn't believed either.
+        #expect(!OrcaBridge.isTrusted(seen: now.addingTimeInterval(3600), now: now))
+    }
+}

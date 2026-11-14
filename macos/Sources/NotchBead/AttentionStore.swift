@@ -41,8 +41,16 @@ final class AttentionStore {
     @ObservationIgnored private var visited: [String] = []
     @ObservationIgnored private var refreshing = false
     @ObservationIgnored private var refreshAgain = false
+    /// Orca's bridge plugin, when installed, says when Orca changed (see OrcaBridge).
+    @ObservationIgnored private let orcaBridge = OrcaBridge()
+    /// Orca must be read on the next check: the plugin said something changed, or you switched
+    /// apps or desktops (which decides whether Orca counts as in front).
+    @ObservationIgnored private var orcaDirty = true
+    @ObservationIgnored private var orcaReadAt = Date.distantPast
 
     private static let interval: Duration = .seconds(3)
+    /// How often Orca is read anyway while its bridge plugin is running, in case it missed something.
+    private static let orcaBridgedInterval: TimeInterval = 30
     /// How often today's total is re-read without a nudge: catches the service's own collection
     /// every 5 minutes and collections started from a browser. It's one local request.
     private static let tokenInterval: TimeInterval = 15
@@ -98,14 +106,26 @@ final class AttentionStore {
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            _ = MainActor.assumeIsolated { Task { await self?.refresh() } }
+            MainActor.assumeIsolated { self?.orcaChanged() }
         }
         // Moving to another desktop can leave the same app frontmost, though you no longer see it.
         spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            _ = MainActor.assumeIsolated { Task { await self?.refresh() } }
+            MainActor.assumeIsolated { self?.orcaChanged() }
         }
+        orcaBridge.start { [weak self] in self?.orcaChanged() }
+    }
+
+    /// Something that Orca's items depend on may have changed: read Orca on a check starting now.
+    private func orcaChanged() {
+        orcaDirty = true
+        Task { await refresh() }
+    }
+
+    /// Without the bridge plugin Orca is read on every check, as before.
+    private func shouldReadOrca(now: Date) -> Bool {
+        orcaDirty || !orcaBridge.isAlive || now.timeIntervalSince(orcaReadAt) >= Self.orcaBridgedInterval
     }
 
     /// Checks every source once. Calls that come in while a check runs (the poll, switching apps,
@@ -126,12 +146,19 @@ final class AttentionStore {
         let cache = chatGPTCache
         let orcaInFront = front == OrcaAttention.bundleID
         let focusedPane = orca.focusedPane
+        let readOrca = shouldReadOrca(now: .now)
+        if readOrca {
+            // Cleared before reading, so a change that arrives during the read marks it again.
+            orcaDirty = false
+            orcaReadAt = .now
+        }
         let (orcaStatus, sessions, threads, chatTurns, recentChats) = await Task.detached(priority: .utility) {
-            (OrcaAttention.scan(orcaIsFrontmost: orcaInFront, focusedPane: focusedPane), WorkBuddyAttention.sessions(),
+            (readOrca ? OrcaAttention.scan(orcaIsFrontmost: orcaInFront, focusedPane: focusedPane) : nil, WorkBuddyAttention.sessions(),
              ChatGPTAttention.scan(cache: cache), ChatGPTChats.activeTurns(), ChatGPTChats.recentChats())
         }.value
         // A source that couldn't be read this time (nil) keeps what it had: reading nothing would look
         // like everything went away, and the next good read would then look like everything was new.
+        // Orca left unread this time (its bridge said nothing changed) keeps what it had the same way.
         if let orcaStatus {
             lastOrca = orcaStatus
             orca = OrcaAttention.step(orca, worktrees: orcaStatus.worktrees, orcaIsFrontmost: orcaInFront)

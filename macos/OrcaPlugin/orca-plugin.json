@@ -1,0 +1,31 @@
+{
+  "manifestVersion": 2,
+  "id": "notchbead-bridge",
+  "name": "NotchBead bridge",
+  "version": "0.1.0",
+  "description": "Tells NotchBead the moment an agent's status or the focused workspace changes, so NotchBead doesn't have to poll Orca.",
+  "engines": {
+    "orca": ">=1.4.248"
+  },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "contributes": {
+    "events": [
+      {
+        "on": "agent.status.changed"
+      },
+      {
+        "on": "workspace.changed"
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "agent:read"
+    },
+    {
+      "kind": "workspace:read"
+    }
+  ]
+}

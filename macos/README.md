@@ -14,7 +14,7 @@ The notch never changes size: a small wing is always out on each side. The right
 
 | Source | How |
 | --- | --- |
-| Orca | `orca worktree ps --json` and `orca terminal list --json`, with the CLI inside Orca.app. Only names and states are decoded, never prompts, commands or replies |
+| Orca | `orca worktree ps --json` and `orca terminal list --json`, with the CLI inside Orca.app. Only names and states are decoded, never prompts, commands or replies. Every 3 seconds, or only when Orca says something changed once the bridge plugin is installed (see [Orca bridge](#orca-bridge)) |
 | WorkBuddy | `~/.workbuddy/workbuddy.db`, opened read-only (`mode=ro`): session title and status, compared from one poll to the next |
 | ChatGPT | `~/.codex/state_5.sqlite`, opened read-only: desktop-app thread names and log paths. Then only the end of each changed thread's log, for the last `task_started` / `task_complete` / `turn_aborted` line; message text is skipped unread. For ordinary chats, `~/.codex/sqlite/codex.db` (read-only): the ids of chats with a reply in progress (`active_chat_turns`) and their titles |
 
@@ -35,6 +35,19 @@ Actions: Run Now (`launchctl kickstart`, or a crontab entry run exactly as cron 
 NotchBead records each run it sees in `~/Library/Application Support/NotchBead/history.json` (the last 50 per task), since launchd keeps no history.
 
 NotchBead connects to nothing but tokenboard on this Mac, and writes nothing but its own settings and that run history.
+
+## Orca bridge
+
+Each look at Orca starts the Orca CLI, a whole Electron process: most of a second of CPU, every 3 seconds. The small Orca plugin in `OrcaPlugin/` tells NotchBead when to look instead. On each agent status change, and each move to another Orca workspace, it posts the Darwin notification `com.notchbead.orca.changed`, and it touches `~/Library/Application Support/NotchBead/orca-bridge-seen`. While that file is less than 12 hours old, NotchBead reads Orca when told to, when you switch apps or desktops, and every 30 seconds in case something was missed. Nothing about your agents leaves Orca through the plugin; NotchBead still asks Orca itself.
+
+```bash
+orca plugin dev load ./OrcaPlugin            # prints what it asks for and a fingerprint
+orca plugin dev load ./OrcaPlugin --approve <fingerprint>
+orca plugin test ./OrcaPlugin
+orca plugin dev unload ./OrcaPlugin          # back to looking every 3 seconds (after up to 12 hours at 30)
+```
+
+It asks for agent status events and the focused workspace's name and branch (`agent:read`, `workspace:read`). Without it NotchBead works as before.
 
 ## Build
 
