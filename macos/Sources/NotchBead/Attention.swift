@@ -232,14 +232,29 @@ enum OrcaAttention {
         return worktree.path.map { URL(fileURLWithPath: $0).lastPathComponent }
     }
 
-    /// Switches Orca to the pane, then brings Orca forward. paneKey is "<tab id>:<pane id>".
+    /// Brings Orca forward, then switches it to the pane. paneKey is "<tab id>:<pane id>".
+    /// In that order, like Orca's own notifications: a pane switched to while Orca's window
+    /// isn't focused often doesn't get the keyboard, so you'd have to click it before typing.
     static func open(paneKey: String) {
+        Task { @MainActor in activate(bundleID: bundleID) }
         let parts = paneKey.split(separator: ":", maxSplits: 1).map(String.init)
         let list = Shell.run(cli, ["terminal", "list", "--json"])
-        if parts.count == 2, let handle = terminalHandle(in: Data(list.output.utf8), tabID: parts[0], leafID: parts[1]) {
-            _ = Shell.run(cli, ["terminal", "switch", "--terminal", handle])
+        guard parts.count == 2, let handle = terminalHandle(in: Data(list.output.utf8), tabID: parts[0], leafID: parts[1])
+        else { return }
+        waitUntilFocused()
+        _ = Shell.run(cli, ["terminal", "switch", "--terminal", handle])
+    }
+
+    /// Waits, up to 2 seconds, until Orca is the active app, plus a moment for its window to take
+    /// focus (moving to another desktop takes a while).
+    private static func waitUntilFocused() {
+        let deadline = Date.now.addingTimeInterval(2)
+        while Date.now < deadline {
+            let front = DispatchQueue.main.sync { NSWorkspace.shared.frontmostApplication?.bundleIdentifier }
+            if front == bundleID { break }
+            Thread.sleep(forTimeInterval: 0.05)
         }
-        Task { @MainActor in activate(bundleID: bundleID) }
+        Thread.sleep(forTimeInterval: 0.15)
     }
 
     static func terminalHandle(in data: Data, tabID: String, leafID: String) -> String? {
