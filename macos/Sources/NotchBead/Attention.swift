@@ -128,6 +128,8 @@ enum OrcaAttention {
         struct MainState: Decodable, Sendable { var state: String?; var stateStartedAt: Double? }
 
         var current: String { (mainAgent?.state ?? state ?? "").lowercased() }
+        /// When it reached its current state, by the main conversation when there is one.
+        var finishedAt: Double { mainAgent?.stateStartedAt ?? stateStartedAt ?? 0 }
         var isYours: Bool { parentPaneKey?.isEmpty ?? true }
         var key: String { "\(paneKey)|\(agentType ?? "")" }
     }
@@ -155,9 +157,11 @@ enum OrcaAttention {
                 flagged = true
                 items.append(item(for: agent, kind: kind, project: project))
             }
-            // Unread is per workspace; name it after the agent that finished last.
+            // Unread is per workspace; name it after the agent that finished last. By the main
+            // conversation's time, like the item's id: Claude's top-level time can be hours old, which
+            // pinned this on an earlier finish in another pane, so one reply showed as two.
             if worktree.unread == true, !flagged, !workspaceOnScreen,
-               let latest = agents.filter({ $0.current == "done" }).max(by: { ($0.stateStartedAt ?? 0) < ($1.stateStartedAt ?? 0) }) {
+               let latest = agents.filter({ $0.current == "done" }).max(by: { $0.finishedAt < $1.finishedAt }) {
                 items.append(item(for: latest, kind: .finished, project: project))
             }
         }
@@ -210,7 +214,7 @@ enum OrcaAttention {
     private static func item(for agent: Agent, kind: AttentionItem.Kind, project: String?) -> AttentionItem {
         // The main conversation's own start time: Claude's top-level one can stay put for hours, which
         // gave every finish in that pane the same id, so later ones never chimed.
-        let started = agent.mainAgent?.stateStartedAt ?? agent.stateStartedAt ?? 0
+        let started = agent.finishedAt
         let title = [agent.taskTitle, agent.displayName, agent.conversationName]
             .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
             .first { !$0.isEmpty } ?? agent.agentType?.capitalized ?? "Agent"

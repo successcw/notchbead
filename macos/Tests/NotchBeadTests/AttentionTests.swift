@@ -15,6 +15,16 @@ struct OrcaAttentionTests {
         Data(#"{"ok":true,"result":{"worktrees":[\#(worktrees.joined(separator: ","))]}}"#.utf8)
     }
 
+    /// Claude's top-level time stays at when its background work began; its own reply is newer
+    /// than the other pane's finish, so the unread mark is that reply, with the same id as the
+    /// watched finish (which is what keeps them one item).
+    @Test func unreadGoesToTheNewestMainReply() {
+        let claude = #"{"paneKey":"t:claude","state":"working","stateStartedAt":10,"agentType":"claude","conversationName":"claude","mainAgent":{"state":"done","stateStartedAt":900}}"#
+        let data = Self.response([Self.worktree(active: false, unread: true, agents: Self.agent("done", pane: "t:pi", at: 500) + "," + claude)])
+        let items = OrcaAttention.parse(data, orcaIsFrontmost: false)
+        #expect(items.map(\.id) == ["orca:t:claude:finished:900"])
+    }
+
     @Test func finishedOnlyWhenUnread() {
         let data = Self.response([
             Self.worktree(active: false, unread: true, agents: Self.agent("done", at: 1) + "," + Self.agent("done", pane: "t:l2", name: "later", at: 5)),
