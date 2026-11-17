@@ -265,6 +265,7 @@ final class AttentionStore {
 
     /// Takes you to it. It clears by itself once its app says it's handled.
     func open(_ item: AttentionItem) {
+        FocusLog.note("open \(item.source)")
         clearArrival()
         switch item.target {
         case .orcaPane(let paneKey):

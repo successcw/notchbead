@@ -37,6 +37,7 @@ struct NotchBeadApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        MainActor.assumeIsolated { FocusLog.start() }
     }
 
     /// Opening NotchBead again while it runs (from Spotlight, Finder or the Dock) brings up the dashboard.

@@ -226,6 +226,20 @@ final class NotchPanel: NSPanel {
     var acceptsKey = false
     override var canBecomeKey: Bool { acceptsKey }
     override var canBecomeMain: Bool { false }
+
+    /// A click on Bead while the panel is closed still makes this window key (SwiftUI does it on
+    /// mouse-down, whatever canBecomeKey says). Clicking Bead while Orca was already in front then
+    /// left your typing going to NotchBead, since bringing Orca forward changed nothing. So the
+    /// keyboard goes straight back to the app you're in.
+    override func becomeKey() {
+        super.becomeKey()
+        guard !acceptsKey else { return }
+        FocusLog.note("closed panel took keyboard; handing it back", window: "NotchPanel")
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.acceptsKey, self.isKeyWindow else { return }
+            self.resignKey()
+        }
+    }
 }
 
 extension EnvironmentValues {

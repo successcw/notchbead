@@ -246,7 +246,8 @@ enum OrcaAttention {
         guard parts.count == 2, let handle = terminalHandle(in: Data(list.output.utf8), tabID: parts[0], leafID: parts[1])
         else { return }
         waitUntilFocused()
-        _ = Shell.run(cli, ["terminal", "switch", "--terminal", handle])
+        let switched = Shell.run(cli, ["terminal", "switch", "--terminal", handle])
+        Task { @MainActor in FocusLog.note("orca terminal switch exit=\(switched.status)") }
     }
 
     /// Waits, up to 2 seconds, until Orca is the active app, plus a moment for its window to take
