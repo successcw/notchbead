@@ -105,6 +105,7 @@ final class NotchWindowController {
     private var mouseMonitors: [Any] = []
     private var outsideClickMonitor: Any?
     private var escapeMonitor: Any?
+    private var otherWindowObserver: NSObjectProtocol?
 
     private static let windowSize = CGSize(width: NotchModel.panelWidth + 40, height: 640)
 
@@ -200,6 +201,17 @@ extension NotchWindowController {
             outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
                 MainActor.assumeIsolated { self?.collapse() }
             }
+            // Opening one of NotchBead's own windows (the dashboard) closes it too: the click-outside
+            // monitor above only hears clicks in other apps.
+            otherWindowObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main
+            ) { [weak self] note in
+                let window = (note.object as? NSWindow).map(ObjectIdentifier.init)
+                MainActor.assumeIsolated {
+                    guard let self, window != ObjectIdentifier(self.panel) else { return }
+                    self.collapse()
+                }
+            }
             // Escape closes the panel unless a task's detail is open, where it first goes back to the list.
             escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard event.keyCode == 53 else { return event }
@@ -216,6 +228,8 @@ extension NotchWindowController {
             }
             outsideClickMonitor = nil
             escapeMonitor = nil
+            if let otherWindowObserver { NotificationCenter.default.removeObserver(otherWindowObserver) }
+            otherWindowObserver = nil
             panel.resignKey()
         }
     }
